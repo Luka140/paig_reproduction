@@ -32,7 +32,7 @@ def stn(U, theta, out_size, name='SpatialTransformer', **kwargs):
     """
 
     def _repeat(x, n_repeats):
-        with tf.variable_scope('_repeat'):
+        with tf.compat.v1.variable_scope('_repeat'):
             rep = tf.transpose(
                 tf.expand_dims(tf.ones([n_repeats, ]), 1), [1, 0])
             rep = tf.cast(rep, 'int32')
@@ -40,7 +40,7 @@ def stn(U, theta, out_size, name='SpatialTransformer', **kwargs):
             return tf.reshape(x, [-1])
 
     def _interpolate(im, x, y, out_size):
-        with tf.variable_scope('_interpolate'):
+        with tf.compat.v1.variable_scope('_interpolate'):
             # constants
             num_batch = tf.shape(im)[0]
             height = tf.shape(im)[1]
@@ -139,7 +139,7 @@ def stn(U, theta, out_size, name='SpatialTransformer', **kwargs):
             return output
 
     def _meshgrid(height, width):
-        with tf.variable_scope('_meshgrid'):
+        with tf.compat.v1.variable_scope('_meshgrid'):
             # This should be equivalent to:
             #  x_t, y_t = np.meshgrid(np.linspace(-1, 1, width),
             #                         np.linspace(-1, 1, height))
@@ -158,7 +158,7 @@ def stn(U, theta, out_size, name='SpatialTransformer', **kwargs):
             return grid
 
     def _transform(theta, input_dim, out_size):
-        with tf.variable_scope('_transform'):
+        with tf.compat.v1.variable_scope('_transform'):
             num_batch = tf.shape(input_dim)[0]
             height = tf.shape(input_dim)[1]
             width = tf.shape(input_dim)[2]
@@ -198,7 +198,7 @@ def stn(U, theta, out_size, name='SpatialTransformer', **kwargs):
 
             return output
 
-    with tf.variable_scope(name):
+    with tf.compat.v1.variable_scope(name):
         output = _transform(theta, U, out_size)
         return output
 
@@ -216,7 +216,7 @@ def batch_transformer(U, thetas, out_size, name='BatchSpatialTransformer'):
     Returns: float
         Tensor of size [num_batch*num_transforms,out_height,out_width,num_channels]
     """
-    with tf.variable_scope(name):
+    with tf.compat.v1.variable_scope(name):
         num_batch, num_transforms = map(int, thetas.get_shape().as_list()[:2])
         indices = [[i]*num_transforms for i in xrange(num_batch)]
         input_repeated = tf.gather(U, tf.reshape(indices, [-1]))

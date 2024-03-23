@@ -19,11 +19,12 @@ plt.switch_backend('agg')
 
 logger = logging.getLogger("tf")
 
+
 CELLS = {
     "bouncing_ode_cell": bouncing_ode_cell,
     "spring_ode_cell": spring_ode_cell,
     "gravity_ode_cell": gravity_ode_cell,
-    "lstm": tf.nn.rnn_cell.LSTMCell
+    "lstm": tf.compat.v1.nn.rnn_cell.LSTMCell
 }
 
 # total number of latent units for each datasets
@@ -129,7 +130,8 @@ class PhysicsNet(BaseNet):
         return train_loss, eval_losses
 
     def build_graph(self):
-        self.input = tf.placeholder(tf.float32, shape=[None, self.seq_len]+self.input_shape)
+        tf.compat.v1.disable_eager_execution()
+        self.input = tf.compat.v1.placeholder(tf.float32, shape=[None, self.seq_len]+self.input_shape)
         self.output = self.conv_feedforward()
 
         self.train_loss, self.eval_losses = self.compute_loss()
@@ -148,9 +150,9 @@ class PhysicsNet(BaseNet):
         self.optimizer = OPTIMIZERS[optimizer](self.lr)
         #self.dyn_optimizer = OPTIMIZERS[optimizer](1e-3)
 
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        update_ops = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            gvs = self.optimizer.compute_gradients(self.loss, var_list=tf.trainable_variables())
+            gvs = self.optimizer.compute_gradients(self.loss, var_list=tf.compat.v1.trainable_variables())
             gvs = [(tf.clip_by_value(grad, -1.0, 1.0), var) for grad, var in gvs if grad is not None]
             self.train_op = self.optimizer.apply_gradients(gvs)
 
@@ -159,9 +161,9 @@ class PhysicsNet(BaseNet):
             #     self.dyn_train_op = self.dyn_optimizer.apply_gradients([gv for gv in gvs if "cell" in gv[1].name])
             #     self.train_op = tf.group(self.train_op, self.dyn_train_op)
 
-    def conv_encoder(self, inp, scope=None, reuse=tf.AUTO_REUSE):
-        with tf.variable_scope(scope or tf.get_variable_scope(), reuse=reuse):
-            with tf.variable_scope("encoder"):
+    def conv_encoder(self, inp, scope=None, reuse=tf.compat.v1.AUTO_REUSE):
+        with tf.compat.v1.variable_scope(scope or tf.compat.v1.get_variable_scope(), reuse=reuse):
+            with tf.compat.v1.variable_scope("encoder"):
                 rang = tf.range(self.conv_input_shape[0], dtype=tf.float32)
                 grid_x, grid_y = tf.meshgrid(rang, rang)
                 grid = tf.concat([grid_x[:,:,None], grid_y[:,:,None]], axis=2)
@@ -178,9 +180,9 @@ class PhysicsNet(BaseNet):
 
                     h = tf.concat(self.masked_objs, axis=0)
                     h = tf.reshape(h, [tf.shape(h)[0], self.input_shape[0]*self.input_shape[0]*self.conv_ch])
-                    h = tf.layers.dense(h, 200, activation=tf.nn.relu)
-                    h = tf.layers.dense(h, 200, activation=tf.nn.relu)
-                    h = tf.layers.dense(h, 2, activation=None)
+                    h = tf.compat.v1.layers.dense(h, 200, activation=tf.nn.relu)
+                    h = tf.compat.v1.layers.dense(h, 200, activation=tf.nn.relu)
+                    h = tf.compat.v1.layers.dense(h, 2, activation=None)
                     h = tf.concat(tf.split(h, self.n_objs, 0), axis=1)
                     h = tf.tanh(h)*(self.conv_input_shape[0]/2)+(self.conv_input_shape[0]/2)
                 else:
@@ -192,20 +194,20 @@ class PhysicsNet(BaseNet):
                     self.enc_masks = h
                     self.masked_objs = [self.enc_masks[:,:,:,i:i+1]*inp for i in range(self.n_objs)]
                     h = tf.concat(self.masked_objs, axis=0)
-                    h = tf.layers.average_pooling2d(h, 2, 2)
+                    h = tf.compat.v1.layers.average_pooling2d(h, 2, 2)
                     #h = tf.reduce_mean(h, axis=-1)
 
-                    h = tf.layers.flatten(h)
-                    h = tf.layers.dense(h, 200, activation=tf.nn.relu)
-                    h = tf.layers.dense(h, 200, activation=tf.nn.relu)
-                    h = tf.layers.dense(h, 2, activation=None)
+                    h = tf.compat.v1.layers.flatten(h)
+                    h = tf.compat.v1.layers.dense(h, 200, activation=tf.nn.relu)
+                    h = tf.compat.v1.layers.dense(h, 200, activation=tf.nn.relu)
+                    h = tf.compat.v1.layers.dense(h, 2, activation=None)
                     h = tf.concat(tf.split(h, self.n_objs, 0), axis=1)
                     h = tf.tanh(h)*(self.conv_input_shape[0]/2)+(self.conv_input_shape[0]/2)
                 return h
 
-    def vel_encoder(self, inp, scope=None, reuse=tf.AUTO_REUSE):
-        with tf.variable_scope(scope or tf.get_variable_scope(), reuse=reuse):
-            with tf.variable_scope("init_vel"):
+    def vel_encoder(self, inp, scope=None, reuse=tf.compat.v1.AUTO_REUSE):
+        with tf.compat.v1.variable_scope(scope or tf.compat.v1.get_variable_scope(), reuse=reuse):
+            with tf.compat.v1.variable_scope("init_vel"):
                 if self.alt_vel:
                     # Computes velocity as a linear combination of the differences
                     # between previous time-steps
@@ -215,7 +217,7 @@ class PhysicsNet(BaseNet):
                     h = tf.split(h, self.n_objs, 2)
                     h = tf.concat(h, axis=0)
                     h = tf.reshape(h, [tf.shape(h)[0], (self.input_steps-1)*2])
-                    h = tf.layers.dense(h, 2, activation=None)
+                    h = tf.compat.v1.layers.dense(h, 2, activation=None)
                     h = tf.split(h, self.n_objs, 0)
                     h = tf.concat(h, axis=1)
                 else:
@@ -223,16 +225,16 @@ class PhysicsNet(BaseNet):
                     h = tf.split(inp, self.n_objs, 2)
                     h = tf.concat(h, axis=0)
                     h = tf.reshape(h, [tf.shape(h)[0], self.input_steps*self.coord_units//self.n_objs//2])
-                    h = tf.layers.dense(h, 100, activation=tf.tanh)
-                    h = tf.layers.dense(h, 100, activation=tf.tanh)
-                    h = tf.layers.dense(h, self.coord_units//self.n_objs//2, activation=None)
+                    h = tf.compat.v1.layers.dense(h, 100, activation=tf.tanh)
+                    h = tf.compat.v1.layers.dense(h, 100, activation=tf.tanh)
+                    h = tf.compat.v1.layers.dense(h, self.coord_units//self.n_objs//2, activation=None)
                     h = tf.split(h, self.n_objs, 0)
                     h = tf.concat(h, axis=1)
         return h
 
-    def conv_st_decoder(self, inp, scope=None, reuse=tf.AUTO_REUSE):
-        with tf.variable_scope(scope or tf.get_variable_scope(), reuse=reuse):
-            with tf.variable_scope("decoder"):
+    def conv_st_decoder(self, inp, scope=None, reuse=tf.compat.v1.AUTO_REUSE):
+        with tf.compat.v1.variable_scope(scope or tf.compat.v1.get_variable_scope(), reuse=reuse):
+            with tf.compat.v1.variable_scope("decoder"):
 
                 batch_size = tf.shape(inp)[0]
                 tmpl_size = self.conv_input_shape[0]//2
@@ -241,7 +243,7 @@ class PhysicsNet(BaseNet):
                 # Setting it to log(2.0) makes the attention window half the size, which might make
                 # it easier for the model to discover objects in some cases.
                 # I haven't found this to make a consistent difference though. 
-                logsigma = tf.get_variable("logsigma", shape=[], initializer=tf.constant_initializer(np.log(1.0)), trainable=True)
+                logsigma = tf.compat.v1.get_variable("logsigma", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
                 sigma = tf.exp(logsigma)
 
                 template = variable_from_network([self.n_objs, tmpl_size, tmpl_size, 1])
@@ -285,8 +287,8 @@ class PhysicsNet(BaseNet):
         return out
 
     def conv_feedforward(self):
-        with tf.variable_scope("net") as tvs:
-            lstms = [tf.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
+        with tf.compat.v1.variable_scope("net") as tvs:
+            lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
             states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
             rollout_cell = self.cell(self.coord_units//2)
 
@@ -323,8 +325,8 @@ class PhysicsNet(BaseNet):
                 pos_vel_seq.append(tf.concat([pos, vel], axis=1))
                 output_seq.append(out)
 
-            current_scope = tf.get_default_graph().get_name_scope()
-            self.network_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 
+            current_scope = tf.compat.v1.get_default_graph().get_name_scope()
+            self.network_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, 
                                                   scope=current_scope)
             logger.info(self.network_vars)
 
@@ -419,5 +421,5 @@ class PhysicsNet(BaseNet):
         fig.tight_layout()
         fig.savefig(os.path.join(self.save_dir, "templates.jpg"))
 
-        logger.info([(v.name, self.sess.run(v)) for v in tf.trainable_variables() if "ode_cell" in v.name or "sigma" in v.name])
+        logger.info([(v.name, self.sess.run(v)) for v in tf.compat.v1.trainable_variables() if "ode_cell" in v.name or "sigma" in v.name])
 

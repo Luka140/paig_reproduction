@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 
-class ode_cell(tf.nn.rnn_cell.BasicRNNCell):
+class ode_cell(tf.compat.v1.nn.rnn_cell.BasicRNNCell):
 
     @property
     def state_size(self):
@@ -26,7 +26,7 @@ class bouncing_ode_cell(ode_cell):
         h_depth = self._num_units
         assert h_depth == input_depth
 
-        self.dt = self.add_variable("dt_x", shape=[], initializer=tf.constant_initializer(0.3), trainable=False)
+        self.dt = self.add_variable("dt_x", shape=[], initializer=tf.compat.v1.constant_initializer(0.3), trainable=False)
         self.built = True
 
     def call(self, poss, vels):
@@ -38,10 +38,10 @@ class bouncing_ode_cell(ode_cell):
 
             for j in range(2):
                 # Compute wall collisions. Image boundaries are hard-coded.
-                vels[j] = tf.where(tf.greater(poss[j]+2, 32), -vels[j], vels[j])
-                vels[j] = tf.where(tf.greater(0.0, poss[j]-2), -vels[j], vels[j])
-                poss[j] = tf.where(tf.greater(poss[j]+2, 32), 32-(poss[j]+2-32)-2, poss[j])  
-                poss[j] = tf.where(tf.greater(0.0, poss[j]-2), -(poss[j]-2)+2, poss[j]) 
+                vels[j] = tf.compat.v1.where(tf.greater(poss[j]+2, 32), -vels[j], vels[j])
+                vels[j] = tf.compat.v1.where(tf.greater(0.0, poss[j]-2), -vels[j], vels[j])
+                poss[j] = tf.compat.v1.where(tf.greater(poss[j]+2, 32), 32-(poss[j]+2-32)-2, poss[j])  
+                poss[j] = tf.compat.v1.where(tf.greater(0.0, poss[j]-2), -(poss[j]-2)+2, poss[j]) 
 
         poss = tf.concat(poss, axis=1)
         vels = tf.concat(vels, axis=1)
@@ -60,9 +60,9 @@ class spring_ode_cell(ode_cell):
         h_depth = self._num_units
         assert h_depth == input_depth
 
-        self.dt = self.add_variable("dt_x", shape=[], initializer=tf.constant_initializer(0.3), trainable=False)
-        self.k = self.add_variable("log_k", shape=[], initializer=tf.constant_initializer(np.log(1.0)), trainable=True)
-        self.equil = self.add_variable("log_l", shape=[], initializer=tf.constant_initializer(np.log(1.0)), trainable=True)
+        self.dt = self.add_variable("dt_x", shape=[], initializer=tf.compat.v1.constant_initializer(0.3), trainable=False)
+        self.k = self.add_variable("log_k", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
+        self.equil = self.add_variable("log_l", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
         self.built = True
 
     def call(self, poss, vels):
@@ -95,9 +95,9 @@ class gravity_ode_cell(ode_cell):
         h_depth = self._num_units
         assert h_depth == input_depth
 
-        self.dt = self.add_variable("dt_x", shape=[], initializer=tf.constant_initializer(0.5), trainable=False)
-        self.g = self.add_variable("log_g", shape=[], initializer=tf.constant_initializer(np.log(1.0)), trainable=True)
-        self.m = self.add_variable("log_m", shape=[], initializer=tf.constant_initializer(np.log(1.0)), trainable=False)
+        self.dt = self.add_variable("dt_x", shape=[], initializer=tf.compat.v1.constant_initializer(0.5), trainable=False)
+        self.g = self.add_variable("log_g", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
+        self.m = self.add_variable("log_m", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=False)
         self.A = tf.exp(self.g)*tf.exp(2*self.m)
         self.built = True
 

@@ -11,10 +11,10 @@ logger = logging.getLogger("tf")
 root_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..")
 
 OPTIMIZERS = {
-    "adam": tf.train.AdamOptimizer,
-    "rmsprop": tf.train.RMSPropOptimizer,
-    "momentum": lambda x: tf.train.MomentumOptimizer(x, 0.9),
-    "sgd": tf.train.GradientDescentOptimizer
+    "adam": tf.compat.v1.train.AdamOptimizer,
+    "rmsprop": tf.compat.v1.train.RMSPropOptimizer,
+    "momentum": lambda x: tf.compat.v1.train.MomentumOptimizer(x, 0.9),
+    "sgd": tf.compat.v1.train.GradientDescentOptimizer
 }
 
 
@@ -35,7 +35,7 @@ class BaseNet:
         self.extra_valid_fns = []
         self.extra_test_fns = []
 
-        self.sess = tf.Session()
+        self.sess = tf.compat.v1.Session()
 
     def run_extra_fns(self, type):
         if type == "train":
@@ -75,7 +75,7 @@ class BaseNet:
                          ckpt_dir=""):
 
         self.save_dir = save_dir
-        self.saver = tf.train.Saver()
+        self.saver = tf.compat.v1.train.Saver()
         if os.path.exists(save_dir):
             if use_ckpt:
                 restore = True
@@ -96,11 +96,12 @@ class BaseNet:
             else:
                 restore = False
 
+        restore = False # TODO: REMOVE THIS LINE LATER, SOMEHOW RESTORE IS SET TO TRUE CAUSING ERRORS
         if restore:
             self.saver.restore(self.sess, os.path.join(restore_dir, "model.ckpt"))
             self.sess.run(self.lr.assign(self.base_lr))
         else:
-            self.sess.run(tf.global_variables_initializer())
+            self.sess.run(tf.compat.v1.global_variables_initializer())
 
     def build_optimizer(self, base_lr, optimizer="adam", anneal_lr=True):
         self.base_lr = base_lr
@@ -146,7 +147,7 @@ class BaseNet:
         for ep in range(1, epochs+1):
             if self.anneal_lr:
                 if ep == int(0.75*epochs):
-                    self.sess.run(tf.assign(self.lr, self.lr/5))
+                    self.sess.run(tf.compat.v1.assign(self.lr, self.lr/5))
             while self.train_iterator.epochs_completed < ep:
                 feed_dict, _ = self.get_batch(batch_size, self.train_iterator)
                 results, _ = self.sess.run(
