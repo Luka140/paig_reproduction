@@ -3,5 +3,5 @@ moviepy==1.0.3
 numpy==1.23.5
 six==1.16.0
 skimage==0.0
-tensorflow==2.15.0
+tensorflow==2.16.1
 pillow==9.5.0
