@@ -2,6 +2,6 @@ matplotlib==3.8.3
 moviepy==1.0.3
 numpy==1.23.5
 six==1.16.0
-skimage==0.0
+scikit-image
 tensorflow==2.15.0
 pillow==9.5.0

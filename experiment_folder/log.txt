@@ -1,0 +1,17 @@
+2024-03-26 09:29:46,305 - tf - runners/run_physics.py
+--task=spring_color_half
+--model=PhysicsNet
+--epochs=500
+--batch_size=100
+--save_dir=experiment_folder
+--autoencoder_loss=3.0
+--base_lr=3e-4
+--anneal_lr=true
+--color=true
+--eval_every_n_epochs=10
+--print_interval=100
+--debug=false
+--use_ckpt=false
+2024-03-26 09:29:59,261 - tf - [('net/decoder/logsigma:0', 0.0), ('net/spring_ode_cell/log_k:0', 0.0), ('net/spring_ode_cell/log_l:0', 0.0)]
+2024-03-26 09:29:59,269 - tf - valid - epoch=0 eval_extrap_loss=762.7304 eval_pred_loss=762.8439 eval_recons_loss=762.86884
+2024-03-26 09:30:10,027 - tf - train - iter=0 train_loss=3051.4583
