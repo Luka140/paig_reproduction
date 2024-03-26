@@ -9,12 +9,12 @@ import torchvision.transforms as tvtrans
 # def unet(inp, base_channels, out_channels, upsamp=True):
 class UNet(pnn.Module):
     def __init__(self, in_features, hidden_dim, out_features, upsamp=True):
-
+        in_channels, height, width = in_features
         super(UNet, self).__init__()
         # h = inp
         # h = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
         self.upsamp = upsamp
-        self.c1 = pnn.Conv2d(in_features, hidden_dim, kernel_size=3, padding="same")
+        self.c1 = pnn.Conv2d(in_channels, hidden_dim, kernel_size=3, padding="same")
         self.rel1 = pnn.ReLU()
 
         # h1 = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
@@ -58,19 +58,18 @@ class UNet(pnn.Module):
             self.rel8 = pnn.ReLU()
 
             # h = tf.image.resize(h4, h3.get_shape()[1:3], method=tf.image.ResizeMethod.BILINEAR)
-            self.up = tvtrans.Resize((hidden_dim*4, hidden_dim*4), interpolation=tvtrans.InterpolationMode.BILINEAR)
+            self.up = tvtrans.Resize((width//4, height//4), interpolation=tvtrans.InterpolationMode.BILINEAR)
             # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=None, padding="SAME")
-            self.c9 = pnn.Conv2d(hidden_dim*4, hidden_dim*2, kernel_size=3, padding="same")
+            self.c9 = pnn.Conv2d(hidden_dim*8, hidden_dim*2, kernel_size=3, padding="same")
         else:
             # h = tf.compat.v1.layers.conv2d_transpose(h, base_channels*4, 3, 2, activation=None, padding="SAME")
-            self.c9 = pnn.Conv2d(hidden_dim*8, hidden_dim*4, kernel_size=3, padding="same")
+            self.c9 = pnn.Conv2d(hidden_dim*8, hidden_dim*2, kernel_size=3, padding="same")
 
 
-        # h = tf.concat([h, h3], axis=-1) TODO: Add this to forward()
+        # h = tf.concat([h, h3], axis=-1) T
 
-        # TODO: how the fuck does this affect dimensionality
         # h = tf.compat.v1.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
-        self.c10 = pnn.Conv2d(hidden_dim * 4, hidden_dim * 4, kernel_size=3, padding="same")
+        self.c10 = pnn.Conv2d(hidden_dim * 6, hidden_dim * 4, kernel_size=3, padding="same")
         self.rel10 = pnn.ReLU()
 
         # h = tf.compat.v1.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
@@ -79,17 +78,17 @@ class UNet(pnn.Module):
 
         if upsamp:
             # h = tf.image.resize(h, h2.get_shape()[1:3], method=tf.image.ResizeMethod.BILINEAR)
-            self.up2 = tvtrans.Resize((hidden_dim*4, hidden_dim*4), interpolation=tvtrans.InterpolationMode.BILINEAR)
+            self.up2 = tvtrans.Resize((width//2, height//2), interpolation=tvtrans.InterpolationMode.BILINEAR)
 
             # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=None, padding="SAME")
-            self.c12 = pnn.Conv2d(hidden_dim * 4, hidden_dim * 4, kernel_size=3, padding="same")
+            self.c12 = pnn.Conv2d(hidden_dim * 4, hidden_dim * 2, kernel_size=3, padding="same")
 
         else:
             # h = tf.compat.v1.layers.conv2d_transpose(h, base_channels*2, 3, 2, activation=None, padding="SAME")
-            self.c12 = pnn.ConvTranspose2d(hidden_dim * 4, hidden_dim * 4, kernel_size=3, output_padding="same")
+            self.c12 = pnn.ConvTranspose2d(hidden_dim * 4, hidden_dim*2, kernel_size=3, output_padding="same")
 
 
-        # h = tf.concat([h, h2], axis=-1) # TODO ADD CONCAT TO FORWARD
+        # h = tf.concat([h, h2], axis=-1)
 
         # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=tf.nn.relu, padding="SAME")
         self.c13 = pnn.Conv2d(hidden_dim * 4, hidden_dim * 2, kernel_size=3, padding="same")
@@ -100,18 +99,18 @@ class UNet(pnn.Module):
 
         if upsamp:
             # h = tf.image.resize(h, h1.get_shape()[1:3], method=tf.image.ResizeMethod.BILINEAR)
-            self.up3 = tvtrans.Resize((hidden_dim*4, hidden_dim*4), interpolation=tvtrans.InterpolationMode.BILINEAR)
+            self.up3 = tvtrans.Resize((width, height), interpolation=tvtrans.InterpolationMode.BILINEAR)
 
             # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=None, padding="SAME")
             self.c15 = pnn.Conv2d(hidden_dim * 2, hidden_dim * 2, kernel_size=3, padding="same")
 
         else:
             # h = tf.compat.v1.layers.conv2d_transpose(h, base_channels, 3, 2, activation=None, padding="SAME")
-            self.c15 = pnn.ConvTranspose2d(hidden_dim * 4, hidden_dim, kernel_size=3, stride=2, output_padding="same")
+            self.c15 = pnn.ConvTranspose2d(hidden_dim * 2, hidden_dim*2, kernel_size=3, stride=2, output_padding="same")
 
-        # h = tf.concat([h, h1], axis=-1) # TODO: Add to forward
+        # h = tf.concat([h, h1], axis=-1)
         # h = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
-        self.c16 = pnn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding="same")
+        self.c16 = pnn.Conv2d(hidden_dim*3, hidden_dim, kernel_size=3, padding="same")
         self.rel16 = pnn.ReLU()
 
 
@@ -119,7 +118,7 @@ class UNet(pnn.Module):
         self.c17 = pnn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding="same")
         self.rel17 = pnn.ReLU()
         # h = tf.compat.v1.layers.conv2d(h, out_channels, 1, activation=None, padding="SAME")
-        self.c18 = pnn.Conv2d(hidden_dim, hidden_dim, kernel_size=1, padding="same")
+        self.c18 = pnn.Conv2d(hidden_dim, out_features, kernel_size=1, padding="same")
 
     def forward(self, x):
         """
@@ -129,9 +128,9 @@ class UNet(pnn.Module):
         x = self.rel1(x)
 
         x = self.c2(x)
-        x = self.rel2(x)
-        print(f"\n\n\n{x.shape}\n\n\n")
-        x = self.pool1(x)
+        x1 = self.rel2(x)
+
+        x = self.pool1(x1)
 
         x = self.c3(x)
         x = self.rel3(x)
@@ -145,19 +144,22 @@ class UNet(pnn.Module):
         x = self.rel5(x)
 
         x = self.c6(x)
-        x = self.rel6(x)
+        x3 = self.rel6(x)
 
-        x3 = self.pool3(x)
+        x = self.pool3(x3)
 
-        x = self.c7(x3)
+        x = self.c7(x)
         x = self.rel7(x)
 
         if self.upsamp:
             x = self.c8(x)
             x = self.rel8(x)
+
             x = self.up(x)
+
         x = self.c9(x)
-        x = torch.concat((x, x3), dim=-1)
+
+        x = torch.concat((x, x3), dim=1)
 
         x = self.c10(x)
         x = self.rel10(x)
@@ -168,7 +170,7 @@ class UNet(pnn.Module):
         if self.upsamp:
             x = self.up2(x)
         x = self.c12(x)
-        x = torch.concat((x, x2), dim=-1)
+        x = torch.concat((x, x2), dim=1)
 
         x = self.c13(x)
         x = self.rel13(x)
@@ -179,11 +181,11 @@ class UNet(pnn.Module):
             x = self.up3(x)
         x = self.c15(x)
 
+        x = torch.concat((x, x1), dim=1)
+
         x = self.rel16(self.c16(x))
-
         x = self.rel17(self.c17(x))
-
-        x = self.rel18(x)
+        x = self.c18(x)
         return x
 
 
