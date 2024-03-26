@@ -168,7 +168,7 @@ class PhysicsNet(BaseNet):
                 grid_x, grid_y = tf.meshgrid(rang, rang)
                 grid = tf.concat([grid_x[:,:,None], grid_y[:,:,None]], axis=2)
                 grid = tf.tile(grid[None,:,:,:], [tf.shape(inp)[0], 1, 1, 1])
-                if self.input_shape[0] < 40:
+                if self.input_shape[0] < 1: # TODO REMOVE
                     h = inp
                     h = shallow_unet(h, 8, self.n_objs, upsamp=True)
 
