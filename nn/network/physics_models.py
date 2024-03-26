@@ -5,11 +5,11 @@ import numpy as np
 import tensorflow as tf
 from pprint import pprint
 import inspect
-
+import torch
 from nn.network.base import BaseNet, OPTIMIZERS
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
-from nn.network.blocks import unet, shallow_unet, variable_from_network
+from nn.network.blocks import UNet, shallow_unet, variable_from_network
 from nn.utils.misc import log_metrics
 from nn.utils.viz import gallery, gif
 from nn.utils.math import sigmoid
@@ -168,8 +168,7 @@ class PhysicsNet(BaseNet):
                 grid_x, grid_y = tf.meshgrid(rang, rang)
                 grid = tf.concat([grid_x[:,:,None], grid_y[:,:,None]], axis=2)
                 grid = tf.tile(grid[None,:,:,:], [tf.shape(inp)[0], 1, 1, 1])
-
-                if self.input_shape[0] < 40:
+                if self.input_shape[0] < 1: # TODO THIS SHOULD BE 40
                     h = inp
                     h = shallow_unet(h, 8, self.n_objs, upsamp=True)
 
@@ -187,7 +186,14 @@ class PhysicsNet(BaseNet):
                     h = tf.tanh(h)*(self.conv_input_shape[0]/2)+(self.conv_input_shape[0]/2)
                 else:
                     h = inp
-                    h = unet(h, 16, self.n_objs, upsamp=True)
+                    # with tf.compat.v1.Session() as sess:
+                    #     h = torch.Tensor(h.eval())
+                    dims = [dim if dim is not None else 100 for dim in h.shape]
+                    # print("\n\n\n\n",dims,"\n\n\n\n")
+                    h = torch.rand(dims[0], dims[-1], dims[1], dims[2])
+                    unet = UNet(h.shape[1], 16, self.n_objs, upsamp=True)
+                    h = unet(h)
+                    h = tf.make_tensor(h.numpy())
 
                     h = tf.concat([h, tf.ones_like(h[:,:,:,:1])], axis=-1)
                     h = tf.nn.softmax(h, axis=-1)
