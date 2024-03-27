@@ -229,7 +229,7 @@ class ShallowUNet(pnn.Module):
         else:
             raise NotImplementedError("Using ShallowUNet without upsamp is not implemented yet")
 
-        self.c11 = pnn.Conv2d(hidden_dim * 2, hidden_dim, kernel_size=3, padding="same")
+        self.c11 = pnn.Conv2d(hidden_dim * 3, hidden_dim, kernel_size=3, padding="same")
         self.c12 = pnn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding="same")
         self.c13 = pnn.Conv2d(hidden_dim, out_features, kernel_size=1, padding="same")
 
@@ -259,44 +259,11 @@ class ShallowUNet(pnn.Module):
             raise NotImplementedError("Using ShallowUNet without upsamp is not implemented yet")
 
         x = torch.concat([x, x1], dim=1)
+
         x = self.ReLU(self.c11(x))
         x = self.ReLU(self.c12(x))
         x = self.ReLU(self.c13(x))
         return x
-
-
-def shallow_unet(inp, base_channels, out_channels, upsamp=True):
-    h = inp
-    h = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
-    h1 = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
-    h = tf.compat.v1.layers.max_pooling2d(h1, 2, 2)
-    h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=tf.nn.relu, padding="SAME")
-    h2 = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=tf.nn.relu, padding="SAME")
-    h = tf.compat.v1.layers.max_pooling2d(h2, 2, 2)
-    h = tf.compat.v1.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
-    h = tf.compat.v1.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
-    #h = tf.concat([h, h3], axis=-1)
-    #h = tf.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
-    #h = tf.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
-    if upsamp:
-        h = tf.image.resize(h, h2.get_shape()[1:3], method=tf.image.ResizeMethod.BILINEAR)
-        h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=None, padding="SAME")
-    else:
-        h = tf.compat.v1.layers.conv2d_transpose(h, base_channels*2, 3, 2, activation=None, padding="SAME")
-    h = tf.concat([h, h2], axis=-1)
-    h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=tf.nn.relu, padding="SAME")
-    h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=tf.nn.relu, padding="SAME")
-    if upsamp:
-        h = tf.image.resize(h, h1.get_shape()[1:3], method=tf.image.ResizeMethod.BILINEAR)
-        h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=None, padding="SAME")
-    else:
-        h = tf.compat.v1.layers.conv2d_transpose(h, base_channels, 3, 2, activation=None, padding="SAME")
-    h = tf.concat([h, h1], axis=-1)
-    h = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
-    h = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
-
-    h = tf.compat.v1.layers.conv2d(h, out_channels, 1, activation=None, padding="SAME")
-    return h
 
 
 def variable_from_network(shape):
