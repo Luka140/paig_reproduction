@@ -10,6 +10,7 @@ import torchvision.transforms as tvtrans
 class UNet(pnn.Module):
     def __init__(self, in_features, hidden_dim, out_features, upsamp=True):
         # TODO THIS CURRENTLY ONLY WORKS FOR UPSAMP=TRUE BUT I DON'T SEE HOW THE ORIGINAL WAS SUPPOSED TO WORK FOR FALSE
+        # TODO this option is also never used so maybe just remove it
         in_channels, height, width = in_features
         super(UNet, self).__init__()
         # h = inp
@@ -187,7 +188,81 @@ class UNet(pnn.Module):
         return x
 
 
+class ConvolutionalEncoder(pnn.Module):
+    def __init__(self):
+        super().__init__()
 
+        ...
+
+
+class ShallowUNet(pnn.Module):
+    def __init__(self,in_features, hidden_dim, out_features, upsamp=True):
+        super(ShallowUNet, self).__init__()
+        in_channels, height, width = in_features
+        self.upsamp = upsamp
+
+        self.c1 = pnn.Conv2d(in_channels, hidden_dim, kernel_size=3, padding="same")
+        self.ReLU = pnn.ReLU()
+
+        self.c2 = pnn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding="same")
+        self.pool1 = pnn.MaxPool2d((2, 2))
+
+        self.c3 = pnn.Conv2d(hidden_dim, hidden_dim*2, kernel_size=3, padding="same")
+        self.c4 = pnn.Conv2d(hidden_dim*2, hidden_dim*2, kernel_size=3, padding="same")
+        self.pool2 = pnn.MaxPool2d((2, 2))
+
+        self.c5 = pnn.Conv2d(hidden_dim*2, hidden_dim*4, kernel_size=3, padding="same")
+        self.c6 = pnn.Conv2d(hidden_dim*4, hidden_dim*4, kernel_size=3, padding="same")
+
+        if upsamp:
+            self.up1 = tvtrans.Resize((width//2, height//2), interpolation=tvtrans.InterpolationMode.BILINEAR)
+            self.c7 = pnn.Conv2d(hidden_dim * 4, hidden_dim * 2, kernel_size=3, padding="same")
+        else:
+            raise NotImplementedError("Using ShallowUNet without upsamp is not implemented yet")
+
+        self.c8 = pnn.Conv2d(hidden_dim*4, hidden_dim*2, kernel_size=3, padding="same")
+        self.c9 = pnn.Conv2d(hidden_dim*2, hidden_dim*2, kernel_size=3, padding="same")
+
+        if upsamp:
+            self.up2 = tvtrans.Resize((width, height), interpolation=tvtrans.InterpolationMode.BILINEAR)
+            self.c10 = pnn.Conv2d(hidden_dim * 2, hidden_dim * 2, kernel_size=3, padding="same")
+        else:
+            raise NotImplementedError("Using ShallowUNet without upsamp is not implemented yet")
+
+        self.c11 = pnn.Conv2d(hidden_dim * 2, hidden_dim, kernel_size=3, padding="same")
+        self.c12 = pnn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding="same")
+        self.c13 = pnn.Conv2d(hidden_dim, out_features, kernel_size=1, padding="same")
+
+    def forward(self, x):
+        x = self.ReLU(self.c1(x))
+        x1 = self.ReLU(self.c2(x))
+        x = self.pool1(x1)
+        x = self.ReLU(self.c3(x))
+        x2 = self.ReLU(self.c4(x))
+        x = self.pool2(x2)
+        x = self.ReLU(self.c5(x))
+        x = self.ReLU(self.c6(x))
+
+        if self.upsamp:
+            x = self.up1(x)
+            x = self.c7(x)
+        else:
+            raise NotImplementedError("Using ShallowUNet without upsamp is not implemented yet")
+        x = torch.concat([x, x2], dim=1)
+        x = self.ReLU(self.c8(x))
+        x = self.ReLU(self.c9(x))
+
+        if self.upsamp:
+            x = self.up2(x)
+            x = self.c10(x)
+        else:
+            raise NotImplementedError("Using ShallowUNet without upsamp is not implemented yet")
+
+        x = torch.concat([x, x1], dim=1)
+        x = self.ReLU(self.c11(x))
+        x = self.ReLU(self.c12(x))
+        x = self.ReLU(self.c13(x))
+        return x
 
 
 def shallow_unet(inp, base_channels, out_channels, upsamp=True):
