@@ -9,7 +9,7 @@ import torch
 from nn.network.base import BaseNet, OPTIMIZERS
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
-from nn.network.blocks import UNet, ShallowUNet, shallow_unet, variable_from_network
+from nn.network.blocks import UNet, ShallowUNet, variable_from_network
 from nn.utils.misc import log_metrics
 from nn.utils.viz import gallery, gif
 from nn.utils.math import sigmoid
