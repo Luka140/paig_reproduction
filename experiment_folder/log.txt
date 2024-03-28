@@ -1,4 +1,4 @@
-2024-03-26 16:26:28,408 - tf - runners/run_physics.py
+2024-03-26 18:18:22,400 - tf - runners/run_physics.py
 --task=spring_color_half
 --model=PhysicsNet
 --epochs=500
@@ -12,17 +12,3 @@
 --print_interval=100
 --debug=false
 --use_ckpt=false
-2024-03-26 16:26:38,726 - tf - [('net/decoder/logsigma:0', 0.0), ('net/spring_ode_cell/log_k:0', 0.0), ('net/spring_ode_cell/log_l:0', 0.0)]
-2024-03-26 16:26:38,733 - tf - valid - epoch=0 eval_extrap_loss=762.62195 eval_pred_loss=762.7657 eval_recons_loss=762.76434
-2024-03-26 16:26:47,137 - tf - train - iter=0 train_loss=3050.8572
-2024-03-26 16:28:44,044 - tf - train - iter=100 train_loss=218.14966
-2024-03-26 16:30:41,010 - tf - train - iter=200 train_loss=66.7745
-2024-03-26 16:32:40,982 - tf - train - iter=300 train_loss=58.80944
-2024-03-26 16:34:38,772 - tf - train - iter=400 train_loss=46.712563
-2024-03-26 16:36:40,727 - tf - [('net/decoder/logsigma:0', -0.059109095), ('net/spring_ode_cell/log_k:0', -0.13873334), ('net/spring_ode_cell/log_l:0', 0.044698894)]
-2024-03-26 16:36:40,727 - tf - valid - epoch=10 eval_extrap_loss=22.197857 eval_pred_loss=16.53294 eval_recons_loss=8.003478
-2024-03-26 16:36:42,359 - tf - train - iter=500 train_loss=39.316204
-2024-03-26 16:38:40,245 - tf - train - iter=600 train_loss=37.230316
-2024-03-26 16:40:37,517 - tf - train - iter=700 train_loss=35.986248
-2024-03-26 16:42:35,487 - tf - train - iter=800 train_loss=36.844334
-2024-03-26 16:44:33,234 - tf - train - iter=900 train_loss=34.047794

@@ -5,8 +5,12 @@ import numpy as np
 import tensorflow as tf
 from pprint import pprint
 import inspect
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
 
-from nn.network.base import BaseNet, OPTIMIZERS
+from nn.network.torch_base import BaseNet, OPTIMIZERS
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
 from nn.network.blocks import unet, shallow_unet, variable_from_network
