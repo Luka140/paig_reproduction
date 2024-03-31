@@ -5,12 +5,8 @@ import numpy as np
 import tensorflow as tf
 from pprint import pprint
 import inspect
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
 
-from nn.network.torch_base import BaseNet, OPTIMIZERS
+from nn.network.base import BaseNet, OPTIMIZERS
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
 from nn.network.blocks import unet, shallow_unet, variable_from_network
@@ -291,6 +287,7 @@ class PhysicsNet(BaseNet):
         return out
 
     def conv_feedforward(self):
+        print("Building feedforward network")
         with tf.compat.v1.variable_scope("net") as tvs:
             lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
             states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]

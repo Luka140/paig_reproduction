@@ -4,8 +4,6 @@ import shutil
 import logging
 import numpy as np
 import tensorflow as tf
-import torch
-
 from nn.utils.misc import log_metrics, zipdir
 
 logger = logging.getLogger("tf")
