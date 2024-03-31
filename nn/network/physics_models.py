@@ -1,20 +1,20 @@
-import os
-import shutil
+import inspect
 import logging
+import os
+
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from pprint import pprint
-import inspect
 import torch
+import torch.nn as pnn
+
 from nn.network.base import BaseNet, OPTIMIZERS
+from nn.network.blocks import UNet, ShallowUNet, variable_from_network, ConvolutionalEncoder
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
-from nn.network.blocks import UNet, ShallowUNet, variable_from_network
-from nn.utils.misc import log_metrics
 from nn.utils.viz import gallery, gif
-from nn.utils.math import sigmoid
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+
 plt.switch_backend('agg')
 
 logger = logging.getLogger("tf")
@@ -68,8 +68,8 @@ class PhysicsNet(BaseNet):
         self.conv_ch = 3 if color else 1
         self.input_size = input_size
 
-        self.conv_input_shape = [int(np.sqrt(input_size))]*2+[self.conv_ch]
-        self.input_shape = [int(np.sqrt(input_size))]*2+[self.conv_ch] # same as conv_input_shape, just here for backward compatibility
+        self.conv_input_shape = [self.conv_ch]+[int(np.sqrt(input_size))]*2 # Swapped order of channels and img dimensions
+        self.input_shape = [self.conv_ch] + [int(np.sqrt(input_size))]*2 # same as conv_input_shape, just here for backward compatibility
 
         self.encoder = {name: method for name, method in \
             inspect.getmembers(self, predicate=inspect.ismethod) if "encoder" in name
@@ -78,7 +78,7 @@ class PhysicsNet(BaseNet):
             inspect.getmembers(self, predicate=inspect.ismethod) if "decoder" in name
         }[decoder_type]  
 
-        self.output_shape = self.input_shape
+        self.output_shape = self.conv_input_shape
 
         assert seq_len > input_steps + pred_steps
         assert input_steps >= 1
@@ -96,6 +96,10 @@ class PhysicsNet(BaseNet):
 
         self.extra_valid_fns.append((self.visualize_sequence,[],{}))
         self.extra_test_fns.append((self.visualize_sequence,[],{}))
+        ############
+        self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2,
+                                            self.n_objs)
+
 
     def get_batch(self, batch_size, iterator):
         batch_x, _ = iterator.next_batch(batch_size)
@@ -160,67 +164,6 @@ class PhysicsNet(BaseNet):
             # if len([gv for gv in gvs if "cell" in gv[1].name]) > 0:
             #     self.dyn_train_op = self.dyn_optimizer.apply_gradients([gv for gv in gvs if "cell" in gv[1].name])
             #     self.train_op = tf.group(self.train_op, self.dyn_train_op)
-
-    def conv_encoder(self, inp, scope=None, reuse=tf.compat.v1.AUTO_REUSE):
-        with tf.compat.v1.variable_scope(scope or tf.compat.v1.get_variable_scope(), reuse=reuse):
-            with tf.compat.v1.variable_scope("encoder"):
-                # rang = tf.range(self.conv_input_shape[0], dtype=tf.float32)
-                # grid_x, grid_y = tf.meshgrid(rang, rang)
-                # grid = tf.concat([grid_x[:,:,None], grid_y[:,:,None]], axis=2)
-                # grid = tf.tile(grid[None,:,:,:], [tf.shape(inp)[0], 1, 1, 1])
-                if self.input_shape[0] < 40:
-                    h = inp
-
-                    #### TODO TEMPORARY RANDOM INPUT INTO UNET TO IMPLEMENT TORCH
-                    dims = [dim if dim is not None else 100 for dim in h.shape]
-                    h = torch.rand(dims[0], dims[-1], dims[1], dims[2])
-
-                    shallow_unet = ShallowUNet(h.shape[1:4], 8, self.n_objs, upsamp=True)
-                    h = shallow_unet(h)
-                    h = tf.convert_to_tensor(h.reshape(h.shape[0],h.shape[2], h.shape[3], h.shape[1]).numpy(force=True))
-                    #### TODO the stuff above should be rewritten once inputs and and code further down are changed to pytorch
-
-                    # h = shallow_unet(h, 8, self.n_objs, upsamp=True)
-
-                    h = tf.concat([h, tf.ones_like(h[:,:,:,:1])], axis=-1)
-                    h = tf.nn.softmax(h, axis=-1)
-                    self.enc_masks = h
-                    self.masked_objs = [self.enc_masks[:,:,:,i:i+1]*inp for i in range(self.n_objs)]
-
-                    h = tf.concat(self.masked_objs, axis=0)
-                    h = tf.reshape(h, [tf.shape(h)[0], self.input_shape[0]*self.input_shape[0]*self.conv_ch])
-                    h = tf.compat.v1.layers.dense(h, 200, activation=tf.nn.relu)
-                    h = tf.compat.v1.layers.dense(h, 200, activation=tf.nn.relu)
-                    h = tf.compat.v1.layers.dense(h, 2, activation=None)
-                    h = tf.concat(tf.split(h, self.n_objs, 0), axis=1)
-                    h = tf.tanh(h)*(self.conv_input_shape[0]/2)+(self.conv_input_shape[0]/2)
-                else:
-                    h = inp
-
-                    #### TODO TEMPORARY RANDOM INPUT INTO UNET TO IMPLEMENT TORCH
-                    dims = [dim if dim is not None else 100 for dim in h.shape]
-                    h = torch.rand(dims[0], dims[-1], dims[1], dims[2])
-
-                    unet = UNet(h.shape[1:4], 16, self.n_objs, upsamp=True)
-                    h = unet(h)
-                    h = tf.convert_to_tensor(h.reshape(h.shape[0],h.shape[2], h.shape[3], h.shape[1]).numpy(force=True))
-                    #### TODO the stuff above should be rewritten once inputs and and code further down are changed to pytorch
-
-                    h = tf.concat([h, tf.ones_like(h[:,:,:,:1])], axis=-1)
-                    h = tf.nn.softmax(h, axis=-1)
-                    self.enc_masks = h
-                    self.masked_objs = [self.enc_masks[:,:,:,i:i+1]*inp for i in range(self.n_objs)]
-                    h = tf.concat(self.masked_objs, axis=0)
-                    h = tf.compat.v1.layers.average_pooling2d(h, 2, 2)
-                    #h = tf.reduce_mean(h, axis=-1)
-
-                    h = tf.compat.v1.layers.flatten(h)
-                    h = tf.compat.v1.layers.dense(h, 200, activation=tf.nn.relu)
-                    h = tf.compat.v1.layers.dense(h, 200, activation=tf.nn.relu)
-                    h = tf.compat.v1.layers.dense(h, 2, activation=None)
-                    h = tf.concat(tf.split(h, self.n_objs, 0), axis=1)
-                    h = tf.tanh(h)*(self.conv_input_shape[0]/2)+(self.conv_input_shape[0]/2)
-                return h
 
     def vel_encoder(self, inp, scope=None, reuse=tf.compat.v1.AUTO_REUSE):
         with tf.compat.v1.variable_scope(scope or tf.compat.v1.get_variable_scope(), reuse=reuse):
@@ -305,13 +248,16 @@ class PhysicsNet(BaseNet):
 
     def conv_feedforward(self):
         with tf.compat.v1.variable_scope("net") as tvs:
+
+            # TODO: what do the lines below do?
             lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
             states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
             rollout_cell = self.cell(self.coord_units//2)
 
             # Encode all the input and train frames
+            # sequence length and batch get flattened together in dim0
             h = tf.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
-            enc_pos = self.encoder(h, scope=tvs)
+            enc_pos, self.enc_masks, self.enc_objs = self.encoder(h)
 
             # decode the input and pred frames
             recons_out = self.decoder(enc_pos, scope=tvs)
@@ -441,74 +387,78 @@ class PhysicsNet(BaseNet):
         logger.info([(v.name, self.sess.run(v)) for v in tf.compat.v1.trainable_variables() if "ode_cell" in v.name or "sigma" in v.name])
 
 
-class PhysicsNetTorch(BaseNet):
-    def __init__(self,
-                 task="",
-                 recurrent_units=128,
-                 lstm_layers=1,
-                 cell_type="",
-                 seq_len=20,
-                 input_steps=3,
-                 pred_steps=5,
-                 autoencoder_loss=0.0,
-                 alt_vel=False,
-                 color=False,
-                 input_size=36 * 36,
-                 ):
 
-        super(PhysicsNetTorch, self).__init__()
-
-        assert task in COORD_UNITS, f"{task} is not a valid task, try one of the following: {', '.join([f'{key}' for key in COORD_UNITS.keys()])}"
-        self.task = task
-
-        self.recurrent_units = recurrent_units
-        self.lstm_layers = lstm_layers
-
-        self.cell_type = cell_type
-        assert cell_type in CELLS, f"{cell_type} is not a valid cell type, try one of the following: {', '.join([f'{key}' for key in CELLS.keys()])}"
-
-        self.color = color
-        self.conv_ch = 3 if color else 1
-        self.input_size = input_size
-
-        self.conv_input_shape = [int(np.sqrt(input_size))]*2+[self.conv_ch]
-        self.input_shape = [int(np.sqrt(input_size))]*2+[self.conv_ch] # same as conv_input_shape, just here for backward compatibility
-        # check if the above can be removed
-
-        # TODO: note I skipped self.encoder and self.decoder because for both there is only one
-        # TODO: So instead we can just use those methods
-
-        self.output_shape = self.input_shape
-
-        assert seq_len > input_steps + pred_steps
-        assert input_steps >= 1
-        assert pred_steps >= 1
-        self.seq_len = seq_len
-        self.input_steps = input_steps
-        self.pred_steps = pred_steps
-        self.extrap_steps = self.seq_len-self.input_steps-self.pred_steps
-
-        self.alt_vel = alt_vel
-        self.autoencoder_loss = autoencoder_loss
-
-        self.coord_units = COORD_UNITS[self.task]
-        self.n_objs = self.coord_units // 4
-
-        # These are part of basenet, maybe rewrite?
-        self.extra_valid_fns.append((self.visualize_sequence,[],{}))
-        self.extra_test_fns.append((self.visualize_sequence,[],{}))
-
-    def get_batch(self, batch_size, iterator):
-        """
-        Joinked this straight from physicsnet
-        """
-        batch_x, _ = iterator.next_batch(batch_size)
-        feed_dict = {self.input: batch_x}
-        return feed_dict, (batch_x, None)
-
-
-    def conv_encoder(self, inp):
-
-        if self.input_shape[0] < 40:
-
-            ...
+# class PhysicsNetTorch(BaseNet):
+#     def __init__(self,
+#                  task="",
+#                  recurrent_units=128,
+#                  lstm_layers=1,
+#                  cell_type="",
+#                  seq_len=20,
+#                  input_steps=3,
+#                  pred_steps=5,
+#                  autoencoder_loss=0.0,
+#                  alt_vel=False,
+#                  color=False,
+#                  input_size=36 * 36,
+#                  ):
+#
+#         super(PhysicsNetTorch, self).__init__()
+#
+#         assert task in COORD_UNITS, f"{task} is not a valid task, try one of the following: {', '.join([f'{key}' for key in COORD_UNITS.keys()])}"
+#         self.task = task
+#
+#         self.recurrent_units = recurrent_units
+#         self.lstm_layers = lstm_layers
+#
+#         self.cell_type = cell_type
+#         assert cell_type in CELLS, f"{cell_type} is not a valid cell type, try one of the following: {', '.join([f'{key}' for key in CELLS.keys()])}"
+#
+#         self.color = color
+#         self.conv_ch = 3 if color else 1
+#         self.input_size = input_size
+#
+#         self.conv_input_shape = [int(np.sqrt(input_size))]*2+[self.conv_ch]
+#         self.input_shape = [int(np.sqrt(input_size))]*2+[self.conv_ch] # same as conv_input_shape, just here for backward compatibility
+#         # check if the above can be removed
+#
+#         # TODO: note I skipped self.encoder and self.decoder because for both there is only one
+#         # TODO: So instead we can just use those methods
+#
+#         self.output_shape = self.input_shape
+#
+#         assert seq_len > input_steps + pred_steps
+#         assert input_steps >= 1
+#         assert pred_steps >= 1
+#         self.seq_len = seq_len
+#         self.input_steps = input_steps
+#         self.pred_steps = pred_steps
+#         self.extrap_steps = self.seq_len-self.input_steps-self.pred_steps
+#
+#         self.alt_vel = alt_vel
+#         self.autoencoder_loss = autoencoder_loss
+#
+#         self.coord_units = COORD_UNITS[self.task]
+#         self.n_objs = self.coord_units // 4
+#
+#         # These are part of basenet, maybe rewrite?
+#         self.extra_valid_fns.append((self.visualize_sequence,[],{}))
+#         self.extra_test_fns.append((self.visualize_sequence,[],{}))
+#
+#         self.conv_encoder_shallow = ConvolutionalEncoderShallow(h.shape[1:4], 200, 2,
+#                                                                 self.n_objs, self.input_shape, self.conv_ch)
+#
+#     def get_batch(self, batch_size, iterator):
+#         """
+#         Joinked this straight from physicsnet
+#         """
+#         batch_x, _ = iterator.next_batch(batch_size)
+#         feed_dict = {self.input: batch_x}
+#         return feed_dict, (batch_x, None)
+#
+#
+#     def conv_encoder(self, inp):
+#
+#         if self.input_shape[0] < 40:
+#
+#             ...

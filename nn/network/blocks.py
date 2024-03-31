@@ -6,7 +6,60 @@ import torchvision.transforms as tvtrans
 """ Useful subnetwork components """
 
 
-# def unet(inp, base_channels, out_channels, upsamp=True):
+class ConvolutionalEncoder(pnn.Module):
+    def __init__(self, in_features, hidden_dim, out_features, n_objects):
+        """
+        :param in_features: input shape [channels, height, width]
+
+        """
+        super().__init__()
+        self.input_shape = in_features
+        self.conv_ch = in_features[0]
+        self.n_objs = n_objects
+        self.shallow_unet = ShallowUNet(in_features, 8, n_objects, upsamp=True)
+        self.unet = UNet(in_features, 16, n_objects)
+        self.relu = pnn.ReLU()
+        self.tanh = pnn.Tanh()
+        self.softmax = pnn.Softmax(dim=1)
+        self.pool1 = pnn.AvgPool2d((2, 2))
+        # This input dim is kinda wack
+        if self.input_shape[1] < 40:
+            self.l1 = pnn.Linear(in_features[1] * in_features[1] * self.conv_ch, hidden_dim)
+        else:
+            self.l1 = pnn.Linear(in_features[1]//2 * in_features[1]//2 * self.conv_ch, hidden_dim)
+        self.l2 = pnn.Linear(hidden_dim, hidden_dim)
+        self.l3 = pnn.Linear(hidden_dim, out_features)
+
+    def forward(self, inp):
+        x = inp
+        if self.input_shape[1] < 40:
+            x = self.shallow_unet(x)
+        else:
+            x = self.unet(x)
+
+        # Adds background
+        x = torch.concat([x, torch.ones(x.shape[0], 1, x.shape[2], x.shape[3])], dim=1)
+        x = self.softmax(x)
+
+        enc_masks = x
+        masked_objs = [enc_masks[:, i:i+1, :, :] * inp for i in range(self.n_objs)]
+        x = torch.concat(masked_objs, dim=0)
+
+        if self.input_shape[1] < 40:
+            # Reshape to batch * the number of entries in a single image (w * h * channels)
+            x = torch.reshape(x, [x.shape[0], self.input_shape[1] * self.input_shape[2] * self.conv_ch])
+        else:
+            x = self.pool1(x)
+            x = torch.flatten(x, start_dim=1)
+
+        x = self.relu(self.l1(x))
+        x = self.relu(self.l2(x))
+        x = self.l3(x)
+        x = torch.concat(torch.split(x, self.n_objs, 0), dim=1)
+        x = self.tanh(x) * (self.input_shape[0] / 2) + (self.input_shape[0] / 2)
+        return x, enc_masks, masked_objs
+
+
 class UNet(pnn.Module):
     def __init__(self, in_features, hidden_dim, out_features, upsamp=True):
         # TODO THIS CURRENTLY ONLY WORKS FOR UPSAMP=TRUE BUT I DON'T SEE HOW THE ORIGINAL WAS SUPPOSED TO WORK FOR FALSE
@@ -188,15 +241,8 @@ class UNet(pnn.Module):
         return x
 
 
-class ConvolutionalEncoder(pnn.Module):
-    def __init__(self):
-        super().__init__()
-
-        ...
-
-
 class ShallowUNet(pnn.Module):
-    def __init__(self,in_features, hidden_dim, out_features, upsamp=True):
+    def __init__(self, in_features, hidden_dim, out_features, upsamp=True):
         super(ShallowUNet, self).__init__()
         in_channels, height, width = in_features
         self.upsamp = upsamp
@@ -274,3 +320,15 @@ def variable_from_network(shape):
     var = tf.compat.v1.layers.dense(var, np.prod(shape), activation=None)
     var = tf.reshape(var, shape)
     return var
+
+
+if __name__ == "__main__":
+    n_objs = 5
+    # conv_input_shape = [3, 32, 32]
+    conv_input_shape = [3, 40, 40]
+
+    enc = ConvolutionalEncoder(conv_input_shape, 200, 2, n_objs)
+    h = torch.Tensor(1000, *conv_input_shape)
+
+    x, _, __ = enc(h)
+    print(x.shape)
