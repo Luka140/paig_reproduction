@@ -71,12 +71,12 @@ class PhysicsNet(BaseNet):
         self.conv_input_shape = [self.conv_ch]+[int(np.sqrt(input_size))]*2 # Swapped order of channels and img dimensions
         self.input_shape = [self.conv_ch] + [int(np.sqrt(input_size))]*2 # same as conv_input_shape, just here for backward compatibility
 
-        self.encoder = {name: method for name, method in \
-            inspect.getmembers(self, predicate=inspect.ismethod) if "encoder" in name
-        }[encoder_type] 
+        # self.encoder = {name: method for name, method in \
+        #     inspect.getmembers(self, predicate=inspect.ismethod) if "encoder" in name
+        # }[encoder_type] 
         self.decoder = {name: method for name, method in \
             inspect.getmembers(self, predicate=inspect.ismethod) if "decoder" in name
-        }[decoder_type]  
+        }[decoder_type]
 
         self.output_shape = self.conv_input_shape
 
@@ -96,10 +96,13 @@ class PhysicsNet(BaseNet):
 
         self.extra_valid_fns.append((self.visualize_sequence,[],{}))
         self.extra_test_fns.append((self.visualize_sequence,[],{}))
-        ############
-        self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2,
-                                            self.n_objs)
 
+        ############
+
+        self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs)
+        
+        # for decoder 
+        self.log_sig = 1.0
 
     def get_batch(self, batch_size, iterator):
         batch_x, _ = iterator.next_batch(batch_size)
@@ -192,57 +195,60 @@ class PhysicsNet(BaseNet):
                     h = tf.concat(h, axis=1)
         return h
 
-    def conv_st_decoder(self, inp, scope=None, reuse=tf.compat.v1.AUTO_REUSE):
-        with tf.compat.v1.variable_scope(scope or tf.compat.v1.get_variable_scope(), reuse=reuse):
-            with tf.compat.v1.variable_scope("decoder"):
+    def conv_st_decoder(self, inp):
+        batch_size = inp.shape[0]
+        tmpl_size = self.conv_input_shape[1]//2
 
-                batch_size = tf.shape(inp)[0]
-                tmpl_size = self.conv_input_shape[0]//2
+        # This parameter can be played with.
+        # Setting it to log(2.0) makes the attention window half the size, which might make
+        # it easier for the model to discover objects in some cases.
+        # I haven't found this to make a consistent difference though. 
+        # logsigma = tf.compat.v1.get_variable("logsigma", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
+        logsigma = np.log(self.log_sig)
+        sigma = tf.exp(logsigma)
+        
+        #TODO i think this is supposed to be the background - whats up with the tile though - why +5?
+        
+        # TODO maybe swap the channel dim to spot 1 later in the torch.randn calls
+        # template = variable_from_network([self.n_objs, tmpl_size, tmpl_size, 1])
+        template = torch.randn([self.n_objs, tmpl_size, tmpl_size, 1])
+        self.template = template
+        template = torch.tile(template, [1,1,1,3])+5
+        
+        # Non background objects
+        # contents = variable_from_network([self.n_objs, tmpl_size, tmpl_size, self.conv_ch])
+        contents = torch.randn([self.n_objs, tmpl_size, tmpl_size, self.conv_ch])
+        self.contents = contents 
+        contents = pnn.Sigmoid()(contents)
+        joint = torch.concat([template, contents], dim=-1)
 
-                # This parameter can be played with.
-                # Setting it to log(2.0) makes the attention window half the size, which might make
-                # it easier for the model to discover objects in some cases.
-                # I haven't found this to make a consistent difference though. 
-                logsigma = tf.compat.v1.get_variable("logsigma", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
-                sigma = tf.exp(logsigma)
+        out_temp_cont = []
+        for loc, join in zip(torch.split(inp, self.n_objs, -1), torch.split(joint, self.n_objs, 0)):
+            theta0 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
+            theta1 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
+            theta2 = (self.conv_input_shape[1]/2-loc[:,0])/tmpl_size*sigma
+            theta3 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
+            theta4 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
+            theta5 = (self.conv_input_shape[1]/2-loc[:,1])/tmpl_size*sigma
+            theta = torch.stack([theta0, theta1, theta2, theta3, theta4, theta5], dim=1)
 
-                template = variable_from_network([self.n_objs, tmpl_size, tmpl_size, 1])
-                self.template = template
-                template = tf.tile(template, [1,1,1,3])+5
+            out_join = stn(torch.tile(join, [inp.shape[0], 1, 1, 1]), theta, self.conv_input_shape[1:])
+            out_temp_cont.append(torch.split(out_join, 2, -1))
 
-                contents = variable_from_network([self.n_objs, tmpl_size, tmpl_size, self.conv_ch])
-                self.contents = contents 
-                contents = tf.nn.sigmoid(contents)
-                joint = tf.concat([template, contents], axis=-1)
+        background_content = variable_from_network([1]+self.input_shape)
+        self.background_content = pnn.Sigmoid()(background_content)
+        background_content = torch.tile(self.background_content, [batch_size, 1, 1, 1])
+        contents = [p[1] for p in out_temp_cont]
+        contents.append(background_content)
+        self.transf_contents = contents
 
-                c2t = tf.convert_to_tensor
-                out_temp_cont = []
-                for loc, join in zip(tf.split(inp, self.n_objs, -1), tf.split(joint, self.n_objs, 0)):
-                    theta0 = tf.tile(c2t([sigma]), [tf.shape(inp)[0]])
-                    theta1 = tf.tile(c2t([0.0]), [tf.shape(inp)[0]])
-                    theta2 = (self.conv_input_shape[0]/2-loc[:,0])/tmpl_size*sigma
-                    theta3 = tf.tile(c2t([0.0]), [tf.shape(inp)[0]])
-                    theta4 = tf.tile(c2t([sigma]), [tf.shape(inp)[0]])
-                    theta5 = (self.conv_input_shape[0]/2-loc[:,1])/tmpl_size*sigma
-                    theta = tf.stack([theta0, theta1, theta2, theta3, theta4, theta5], axis=1)
+        background_mask = torch.ones_like(out_temp_cont[0][0])
+        masks = torch.stack([p[0]-5 for p in out_temp_cont]+[background_mask], dim=-1)
+        masks = torch.Softmax()(masks, dim=-1)
+        masks = torch.unstack(masks, dim=-1)
+        self.transf_masks = masks
 
-                    out_join = stn(tf.tile(join, [tf.shape(inp)[0], 1, 1, 1]), theta, self.conv_input_shape[:2])
-                    out_temp_cont.append(tf.split(out_join, 2, -1))
-
-                background_content = variable_from_network([1]+self.input_shape)
-                self.background_content = tf.nn.sigmoid(background_content)
-                background_content = tf.tile(self.background_content, [batch_size, 1, 1, 1])
-                contents = [p[1] for p in out_temp_cont]
-                contents.append(background_content)
-                self.transf_contents = contents
-
-                background_mask = tf.ones_like(out_temp_cont[0][0])
-                masks = tf.stack([p[0]-5 for p in out_temp_cont]+[background_mask], axis=-1)
-                masks = tf.nn.softmax(masks, axis=-1)
-                masks = tf.unstack(masks, axis=-1)
-                self.transf_masks = masks
-
-                out = tf.add_n([m*c for m, c in zip(masks, contents)])
+        out = sum([m*c for m, c in zip(masks, contents)])
 
         return out
 
@@ -386,79 +392,3 @@ class PhysicsNet(BaseNet):
 
         logger.info([(v.name, self.sess.run(v)) for v in tf.compat.v1.trainable_variables() if "ode_cell" in v.name or "sigma" in v.name])
 
-
-
-# class PhysicsNetTorch(BaseNet):
-#     def __init__(self,
-#                  task="",
-#                  recurrent_units=128,
-#                  lstm_layers=1,
-#                  cell_type="",
-#                  seq_len=20,
-#                  input_steps=3,
-#                  pred_steps=5,
-#                  autoencoder_loss=0.0,
-#                  alt_vel=False,
-#                  color=False,
-#                  input_size=36 * 36,
-#                  ):
-#
-#         super(PhysicsNetTorch, self).__init__()
-#
-#         assert task in COORD_UNITS, f"{task} is not a valid task, try one of the following: {', '.join([f'{key}' for key in COORD_UNITS.keys()])}"
-#         self.task = task
-#
-#         self.recurrent_units = recurrent_units
-#         self.lstm_layers = lstm_layers
-#
-#         self.cell_type = cell_type
-#         assert cell_type in CELLS, f"{cell_type} is not a valid cell type, try one of the following: {', '.join([f'{key}' for key in CELLS.keys()])}"
-#
-#         self.color = color
-#         self.conv_ch = 3 if color else 1
-#         self.input_size = input_size
-#
-#         self.conv_input_shape = [int(np.sqrt(input_size))]*2+[self.conv_ch]
-#         self.input_shape = [int(np.sqrt(input_size))]*2+[self.conv_ch] # same as conv_input_shape, just here for backward compatibility
-#         # check if the above can be removed
-#
-#         # TODO: note I skipped self.encoder and self.decoder because for both there is only one
-#         # TODO: So instead we can just use those methods
-#
-#         self.output_shape = self.input_shape
-#
-#         assert seq_len > input_steps + pred_steps
-#         assert input_steps >= 1
-#         assert pred_steps >= 1
-#         self.seq_len = seq_len
-#         self.input_steps = input_steps
-#         self.pred_steps = pred_steps
-#         self.extrap_steps = self.seq_len-self.input_steps-self.pred_steps
-#
-#         self.alt_vel = alt_vel
-#         self.autoencoder_loss = autoencoder_loss
-#
-#         self.coord_units = COORD_UNITS[self.task]
-#         self.n_objs = self.coord_units // 4
-#
-#         # These are part of basenet, maybe rewrite?
-#         self.extra_valid_fns.append((self.visualize_sequence,[],{}))
-#         self.extra_test_fns.append((self.visualize_sequence,[],{}))
-#
-#         self.conv_encoder_shallow = ConvolutionalEncoderShallow(h.shape[1:4], 200, 2,
-#                                                                 self.n_objs, self.input_shape, self.conv_ch)
-#
-#     def get_batch(self, batch_size, iterator):
-#         """
-#         Joinked this straight from physicsnet
-#         """
-#         batch_x, _ = iterator.next_batch(batch_size)
-#         feed_dict = {self.input: batch_x}
-#         return feed_dict, (batch_x, None)
-#
-#
-#     def conv_encoder(self, inp):
-#
-#         if self.input_shape[0] < 40:
-#
-#             ...

@@ -6,6 +6,22 @@ import torchvision.transforms as tvtrans
 """ Useful subnetwork components """
 
 
+class VelocityEncoder(pnn.Module):
+    ...
+
+# class STDecoder(pnn.Module):
+#     def __init__(self, physics_input_shape, n_objs, logsig=1.0) -> None:
+#         super(STDecoder, self).__init__()
+#         self.logsigma = np.log(logsig)
+#         self.sigma = np.exp(self.logsigma)
+#         self.input_shape = physics_input_shape
+#         self.n_objs = n_objs
+#
+#     def forward(self,inp):
+#         batch_size = tf.shape(inp)[0]
+#         tmpl_size = self.conv_input_shape[0] // 2
+
+
 class ConvolutionalEncoder(pnn.Module):
     def __init__(self, in_features, hidden_dim, out_features, n_objects):
         """
@@ -71,106 +87,61 @@ class UNet(pnn.Module):
         self.upsamp = upsamp
         self.c1 = pnn.Conv2d(in_channels, hidden_dim, kernel_size=3, padding="same")
         self.rel1 = pnn.ReLU()
-
-        # h1 = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
         self.c2 = pnn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding="same")
         self.rel2 = pnn.ReLU()
-
-        # h = tf.compat.v1.layers.max_pooling2d(h1, 2, 2)
         self.pool1 = pnn.MaxPool2d((2, 2))
 
-        # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=tf.nn.relu, padding="SAME")
         self.c3 = pnn.Conv2d(hidden_dim, hidden_dim*2, kernel_size=3, padding="same")
         self.rel3 = pnn.ReLU()
-
-        # h2 = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=tf.nn.relu, padding="SAME")
         self.c4 = pnn.Conv2d(hidden_dim*2, hidden_dim*2, kernel_size=3, padding="same")
         self.rel4 = pnn.ReLU()
-
-        # h = tf.compat.v1.layers.max_pooling2d(h2, 2, 2)
         self.pool2 = pnn.MaxPool2d((2, 2))
 
-
-        # h = tf.compat.v1.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
         self.c5 = pnn.Conv2d(hidden_dim*2, hidden_dim*4, kernel_size=3, padding="same")
         self.rel5 = pnn.ReLU()
-
-        # h3 = tf.compat.v1.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
         self.c6 = pnn.Conv2d(hidden_dim*4, hidden_dim*4, kernel_size=3, padding="same")
         self.rel6 = pnn.ReLU()
-
-        # h = tf.compat.v1.layers.max_pooling2d(h3, 2, 2)
         self.pool3 = pnn.MaxPool2d((2, 2))
 
-        # h = tf.compat.v1.layers.conv2d(h, base_channels*8, 3, activation=tf.nn.relu, padding="SAME")
         self.c7 = pnn.Conv2d(hidden_dim*4, hidden_dim*8, kernel_size=3, padding="same")
         self.rel7 = pnn.ReLU()
 
-        # h4 = tf.compat.v1.layers.conv2d(h, base_channels*8, 3, activation=tf.nn.relu, padding="SAME")
-        # Put this inside the if statement
         if upsamp:
             self.c8 = pnn.Conv2d(hidden_dim * 8, hidden_dim * 8, kernel_size=3, padding="same")
             self.rel8 = pnn.ReLU()
-
-            # h = tf.image.resize(h4, h3.get_shape()[1:3], method=tf.image.ResizeMethod.BILINEAR)
             self.up = tvtrans.Resize((width//4, height//4), interpolation=tvtrans.InterpolationMode.BILINEAR)
-            # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=None, padding="SAME")
             self.c9 = pnn.Conv2d(hidden_dim*8, hidden_dim*2, kernel_size=3, padding="same")
         else:
-            # h = tf.compat.v1.layers.conv2d_transpose(h, base_channels*4, 3, 2, activation=None, padding="SAME")
             self.c9 = pnn.Conv2d(hidden_dim*8, hidden_dim*2, kernel_size=3, padding="same")
 
-
-        # h = tf.concat([h, h3], axis=-1) T
-
-        # h = tf.compat.v1.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
         self.c10 = pnn.Conv2d(hidden_dim * 6, hidden_dim * 4, kernel_size=3, padding="same")
         self.rel10 = pnn.ReLU()
-
-        # h = tf.compat.v1.layers.conv2d(h, base_channels*4, 3, activation=tf.nn.relu, padding="SAME")
         self.c11 = pnn.Conv2d(hidden_dim * 4, hidden_dim * 4, kernel_size=3, padding="same")
         self.rel11 = pnn.ReLU()
 
         if upsamp:
-            # h = tf.image.resize(h, h2.get_shape()[1:3], method=tf.image.ResizeMethod.BILINEAR)
             self.up2 = tvtrans.Resize((width//2, height//2), interpolation=tvtrans.InterpolationMode.BILINEAR)
-
-            # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=None, padding="SAME")
             self.c12 = pnn.Conv2d(hidden_dim * 4, hidden_dim * 2, kernel_size=3, padding="same")
 
         else:
-            # h = tf.compat.v1.layers.conv2d_transpose(h, base_channels*2, 3, 2, activation=None, padding="SAME")
             self.c12 = pnn.ConvTranspose2d(hidden_dim * 4, hidden_dim*2, kernel_size=3, output_padding="same")
 
-        # h = tf.concat([h, h2], axis=-1)
-
-        # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=tf.nn.relu, padding="SAME")
         self.c13 = pnn.Conv2d(hidden_dim * 4, hidden_dim * 2, kernel_size=3, padding="same")
         self.rel13 = pnn.ReLU()
-        # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=tf.nn.relu, padding="SAME")
         self.c14 = pnn.Conv2d(hidden_dim * 2, hidden_dim * 2, kernel_size=3, padding="same")
         self.rel14 = pnn.ReLU()
 
         if upsamp:
-            # h = tf.image.resize(h, h1.get_shape()[1:3], method=tf.image.ResizeMethod.BILINEAR)
             self.up3 = tvtrans.Resize((width, height), interpolation=tvtrans.InterpolationMode.BILINEAR)
-
-            # h = tf.compat.v1.layers.conv2d(h, base_channels*2, 3, activation=None, padding="SAME")
             self.c15 = pnn.Conv2d(hidden_dim * 2, hidden_dim * 2, kernel_size=3, padding="same")
 
         else:
-            # h = tf.compat.v1.layers.conv2d_transpose(h, base_channels, 3, 2, activation=None, padding="SAME")
             self.c15 = pnn.ConvTranspose2d(hidden_dim * 2, hidden_dim*2, kernel_size=3, stride=2, output_padding="same")
 
-        # h = tf.concat([h, h1], axis=-1)
-        # h = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
         self.c16 = pnn.Conv2d(hidden_dim*3, hidden_dim, kernel_size=3, padding="same")
         self.rel16 = pnn.ReLU()
-
-        # h = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
         self.c17 = pnn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding="same")
         self.rel17 = pnn.ReLU()
-        # h = tf.compat.v1.layers.conv2d(h, out_channels, 1, activation=None, padding="SAME")
         self.c18 = pnn.Conv2d(hidden_dim, out_features, kernel_size=1, padding="same")
 
     def forward(self, x):
