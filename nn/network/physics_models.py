@@ -263,10 +263,11 @@ class PhysicsNet(BaseNet):
             # Encode all the input and train frames
             # sequence length and batch get flattened together in dim0
             h = tf.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
+            h = torch.randn([10000]+self.input_shape)
             enc_pos, self.enc_masks, self.enc_objs = self.encoder(h)
 
             # decode the input and pred frames
-            recons_out = self.decoder(enc_pos, scope=tvs)
+            recons_out = self.decoder(enc_pos)
 
             self.recons_out = tf.reshape(recons_out, 
                                          [tf.shape(self.input)[0], self.input_steps+self.pred_steps]+self.input_shape)
