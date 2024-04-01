@@ -7,19 +7,12 @@ import torchvision.transforms as tvtrans
 
 
 class VelocityEncoder(pnn.Module):
-    ...
+    def __init__(self):
+        ...
 
-# class STDecoder(pnn.Module):
-#     def __init__(self, physics_input_shape, n_objs, logsig=1.0) -> None:
-#         super(STDecoder, self).__init__()
-#         self.logsigma = np.log(logsig)
-#         self.sigma = np.exp(self.logsigma)
-#         self.input_shape = physics_input_shape
-#         self.n_objs = n_objs
-#
-#     def forward(self,inp):
-#         batch_size = tf.shape(inp)[0]
-#         tmpl_size = self.conv_input_shape[0] // 2
+
+    def forward(sel, inp):
+        ...
 
 
 class ConvolutionalEncoder(pnn.Module):
