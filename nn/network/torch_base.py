@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from nn.utils.misc import log_metrics, zipdir
 
-logger = logging.getLogger("tf")
+logger = logging.getLogger("torch")
 root_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..")
 
 OPTIMIZERS = {

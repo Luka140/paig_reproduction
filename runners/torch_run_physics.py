@@ -35,13 +35,13 @@ parser.add_argument("--datapoints", type=int, default=0, help="How many datapoin
 
 args = parser.parse_args()
 
-# logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG)
-# ch = logging.StreamHandler()
-# ch.setLevel(logging.DEBUG)
-# formatter = logging.Formatter('%(asctime)s - %(name)s - %(message)s')
-# ch.setFormatter(formatter)
-# logger.addHandler(ch)
+logger = logging.getLogger("torch")
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
 model_classes = classes_in_module(physics_models)
 Model = model_classes[args.model]
