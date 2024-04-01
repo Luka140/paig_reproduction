@@ -95,7 +95,7 @@ class BaseNet:
             else:
                 restore = False
 
-        restore = False # TODO: REMOVE THIS LINE LATER, SOMEHOW RESTORE IS SET TO TRUE CAUSING ERRORS
+        # restore = False # TODO: REMOVE THIS LINE LATER, SOMEHOW RESTORE IS SET TO TRUE CAUSING ERRORS
         if restore:
             self.saver.restore(self.sess, os.path.join(restore_dir, "model.ckpt"))
             self.sess.run(self.lr.assign(self.base_lr))
