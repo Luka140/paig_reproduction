@@ -227,9 +227,9 @@ def tf_batch_transformer(U, thetas, out_size, name='BatchSpatialTransformer'):
 def stn(U, theta, out_size):
     U_pytorch = U.permute(0, 3, 1, 2).clone().detach()
 
-    print(U.shape)
-    print(U_pytorch.shape)
-    print(theta.shape)
+    print("U", U.shape)
+    print("U_pytorch", U_pytorch.shape)
+    print("theta", theta.shape)
 
     num_batch = theta.size(0)
     num_transforms = theta.size(1)

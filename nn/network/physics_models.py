@@ -222,9 +222,15 @@ class PhysicsNet(BaseNet):
         self.contents = contents 
         contents = pnn.Sigmoid()(contents)
         joint = torch.concat([template, contents], dim=-1)
+        print("joint", joint.shape)
+        print("inp", inp.shape)
+        print("self.output", self.conv_input_shape)
 
         out_temp_cont = []
+
         for loc, join in zip(torch.split(inp, self.n_objs, -1), torch.split(joint, self.n_objs, 0)):
+            print("loc, join", loc.shape, join.shape)
+
             theta0 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
             theta1 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
             theta2 = (self.conv_input_shape[1]/2-loc[:,0])/tmpl_size*sigma
