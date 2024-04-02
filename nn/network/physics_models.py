@@ -223,7 +223,7 @@ class PhysicsNet(BaseNet):
         joint = torch.concat([template, contents], dim=1)
 
         out_temp_cont = []
-        for loc, join in zip(torch.split(inp, 1, -1), torch.split(joint, 1, 0)):
+        for loc, join in zip(torch.split(inp, inp.shape[1]//self.n_objs, -1), torch.split(joint, joint.shape[0]//self.n_objs, 0)):
             theta0 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
             theta1 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
             theta2 = (self.conv_input_shape[1]/2-loc[:,0])/tmpl_size*sigma
@@ -231,7 +231,7 @@ class PhysicsNet(BaseNet):
             theta4 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
             theta5 = (self.conv_input_shape[1]/2-loc[:,1])/tmpl_size*sigma
             theta = torch.stack([theta0, theta1, theta2, theta3, theta4, theta5], dim=1)
-
+            print("conv_ch", self.conv_ch, "loc:", loc.shape, "join", join.shape)
             out_join = stn(torch.tile(join, [inp.shape[0], 1, 1, 1]), theta, self.conv_input_shape[1:])
             out_temp_cont.append(torch.split(out_join, 2, -1))
 
