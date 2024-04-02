@@ -100,7 +100,7 @@ class PhysicsNet(BaseNet):
         ############
 
         self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs)
-        self.vel_encoder_block = VelocityEncoder(self.coord_units//2, self.n_objs, alt_vel)
+        self.vel_encoder_block = VelocityEncoder(self.alt_vel, self.input_steps, self.n_objs, self.coord_units)
 
         # for decoder 
         self.log_sig = 1.0
@@ -205,8 +205,8 @@ class PhysicsNet(BaseNet):
         # it easier for the model to discover objects in some cases.
         # I haven't found this to make a consistent difference though. 
         # logsigma = tf.compat.v1.get_variable("logsigma", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
-        logsigma = np.log(self.log_sig)
-        sigma = tf.exp(logsigma)
+        logsigma = self.log_sig
+        sigma = np.exp(logsigma)
         
         #TODO i think this is supposed to be the background - whats up with the tile though - why +5?
         
