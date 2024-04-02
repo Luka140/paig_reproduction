@@ -205,25 +205,25 @@ class PhysicsNet(BaseNet):
         # I haven't found this to make a consistent difference though. 
         # logsigma = tf.compat.v1.get_variable("logsigma", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
         logsigma = np.log(self.log_sig)
-        sigma = tf.exp(logsigma)
+        sigma = np.exp(logsigma)
         
         #TODO i think this is supposed to be the background - whats up with the tile though - why +5?
         
         # TODO maybe swap the channel dim to spot 1 later in the torch.randn calls
         # template = variable_from_network([self.n_objs, tmpl_size, tmpl_size, 1])
-        template = torch.randn([self.n_objs, tmpl_size, tmpl_size, 1])
+        template = torch.randn([self.n_objs, 1, tmpl_size, tmpl_size])
         self.template = template
-        template = torch.tile(template, [1,1,1,3])+5
+        template = torch.tile(template, [1,3,1,1])+5
         
         # Non background objects
         # contents = variable_from_network([self.n_objs, tmpl_size, tmpl_size, self.conv_ch])
-        contents = torch.randn([self.n_objs, tmpl_size, tmpl_size, self.conv_ch])
+        contents = torch.randn([self.n_objs, self.conv_ch, tmpl_size, tmpl_size])
         self.contents = contents 
         contents = pnn.Sigmoid()(contents)
-        joint = torch.concat([template, contents], dim=-1)
+        joint = torch.concat([template, contents], dim=1)
 
         out_temp_cont = []
-        for loc, join in zip(torch.split(inp, self.n_objs, -1), torch.split(joint, self.n_objs, 0)):
+        for loc, join in zip(torch.split(inp, 1, -1), torch.split(joint, 1, 0)):
             theta0 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
             theta1 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
             theta2 = (self.conv_input_shape[1]/2-loc[:,0])/tmpl_size*sigma
