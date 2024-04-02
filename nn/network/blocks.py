@@ -64,8 +64,8 @@ class ConvolutionalEncoder(pnn.Module):
         x = self.relu(self.l1(x))
         x = self.relu(self.l2(x))
         x = self.l3(x)
-        x = torch.concat(torch.split(x, self.n_objs, 0), dim=1)
-        x = self.tanh(x) * (self.input_shape[0] / 2) + (self.input_shape[0] / 2)
+        x = torch.concat(torch.split(x, x.shape[0]//self.n_objs, 0), dim=1)
+        x = self.tanh(x) * (self.input_shape[1] / 2) + (self.input_shape[1] / 2)
         return x, enc_masks, masked_objs
 
 
