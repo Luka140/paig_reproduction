@@ -10,7 +10,7 @@ import torch
 import torch.nn as pnn
 
 from nn.network.base import BaseNet, OPTIMIZERS
-from nn.network.blocks import UNet, ShallowUNet, variable_from_network, ConvolutionalEncoder
+from nn.network.blocks import UNet, ShallowUNet, variable_from_network, ConvolutionalEncoder, VelocityEncoder
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
 from nn.utils.viz import gallery, gif
@@ -100,7 +100,8 @@ class PhysicsNet(BaseNet):
         ############
 
         self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs)
-        
+        self.vel_encoder_block = VelocityEncoder(self.coord_units//2, self.n_objs, alt_vel)
+
         # for decoder 
         self.log_sig = 1.0
 
@@ -254,51 +255,54 @@ class PhysicsNet(BaseNet):
 
     def conv_feedforward(self):
         print("Building feedforward network")
-        with tf.compat.v1.variable_scope("net") as tvs:
+        # TODO: what do the lines below do?
+        lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
+        states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
+        rollout_cell = self.cell(self.coord_units//2)
 
-            # TODO: what do the lines below do?
-            lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
-            states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
-            rollout_cell = self.cell(self.coord_units//2)
+        # Encode all the input and train frames
+        # sequence length and batch get flattened together in dim0
+        # h = tf.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
+        
+        h = torch.randn([10000]+self.input_shape)
+        # h_torch = torch.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
+        
 
-            # Encode all the input and train frames
-            # sequence length and batch get flattened together in dim0
-            h = tf.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
-            enc_pos, self.enc_masks, self.enc_objs = self.encoder(h)
+        enc_pos, self.enc_masks, self.enc_objs = self.encoder(h)
 
-            # decode the input and pred frames
-            recons_out = self.decoder(enc_pos, scope=tvs)
+        # decode the input and pred frames
+        recons_out = self.decoder(enc_pos)
 
-            self.recons_out = tf.reshape(recons_out, 
-                                         [tf.shape(self.input)[0], self.input_steps+self.pred_steps]+self.input_shape)
-            self.enc_pos = tf.reshape(enc_pos, 
-                                      [tf.shape(self.input)[0], self.input_steps+self.pred_steps, self.coord_units//2])
+        self.recons_out = tf.reshape(recons_out, 
+                                        [tf.shape(self.input)[0], self.input_steps+self.pred_steps]+self.input_shape)
+        self.enc_pos = tf.reshape(enc_pos, 
+                                    [tf.shape(self.input)[0], self.input_steps+self.pred_steps, self.coord_units//2])
 
-            if self.input_steps > 1:
-                vel = self.vel_encoder(self.enc_pos[:,:self.input_steps], scope=tvs)
-            else:
-                vel = tf.zeros([tf.shape(self.input)[0], self.coord_units//2])
+        if self.input_steps > 1:
+            vel = self.vel_encoder_block(self.enc_pos[:,:self.input_steps])
+        else:
+            vel = tf.zeros([tf.shape(self.input)[0], self.coord_units//2])
 
-            pos = self.enc_pos[:,self.input_steps-1]
-            output_seq = []
-            pos_vel_seq = []
+        pos = self.enc_pos[:,self.input_steps-1]
+        output_seq = []
+        pos_vel_seq = []
+        pos_vel_seq.append(tf.concat([pos, vel], axis=1))
+
+        # rollout ODE and decoder
+        for t in range(self.pred_steps+self.extrap_steps):
+            # rollout
+            pos, vel = rollout_cell(pos, vel)
+
+            # decode
+            out = self.decoder(pos, scope=tvs)
+
             pos_vel_seq.append(tf.concat([pos, vel], axis=1))
+            output_seq.append(out)
 
-            # rollout ODE and decoder
-            for t in range(self.pred_steps+self.extrap_steps):
-                # rollout
-                pos, vel = rollout_cell(pos, vel)
-
-                # decode
-                out = self.decoder(pos, scope=tvs)
-
-                pos_vel_seq.append(tf.concat([pos, vel], axis=1))
-                output_seq.append(out)
-
-            current_scope = tf.compat.v1.get_default_graph().get_name_scope()
-            self.network_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, 
-                                                  scope=current_scope)
-            logger.info(self.network_vars)
+        current_scope = tf.compat.v1.get_default_graph().get_name_scope()
+        self.network_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, 
+                                                scope=current_scope)
+        logger.info(self.network_vars)
 
         output_seq = tf.stack(output_seq)
         pos_vel_seq = tf.stack(pos_vel_seq)

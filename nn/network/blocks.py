@@ -7,12 +7,45 @@ import torchvision.transforms as tvtrans
 
 
 class VelocityEncoder(pnn.Module):
-    def __init__(self):
-        ...
+    def __init__(self, alt_vel, input_steps, n_objs, coord_units):
+        super(VelocityEncoder, self).__init__()
+        self.alt_vel = alt_vel
+        self.input_steps = input_steps
+        self.n_objs = n_objs
+        self.coord_units = coord_units
 
+        if self.alt_vel:
+            # Linear combination of differences between previous time-steps
+            self.init_vel_linear = pnn.Linear((self.input_steps - 1) * 2, 2)
+        else:
+            # MLP for computing velocity using positions as input
+            self.init_vel_mlp = pnn.Sequential(
+                pnn.Linear(self.input_steps * self.coord_units // self.n_objs // 2, 100),
+                pnn.Tanh(),
+                pnn.Linear(100, 100),
+                pnn.Tanh(),
+                pnn.Linear(100, self.coord_units // self.n_objs // 2)
+            )
 
-    def forward(sel, inp):
-        ...
+    def forward(self, inp):
+        if self.alt_vel:
+            h = torch.split(inp, self.input_steps, dim=1)
+            h = [h[i + 1] - h[i] for i in range(self.input_steps - 1)]
+            h = torch.cat(h, dim=1)
+            h = torch.split(h, self.n_objs, dim=2)
+            h = torch.cat(h, dim=0)
+            h = h.view(h.size(0), (self.input_steps - 1) * 2)
+            h = self.init_vel_linear(h)
+            h = torch.split(h, self.n_objs, dim=0)
+            h = torch.cat(h, dim=1)
+        else:
+            h = torch.split(inp, self.n_objs, dim=2)
+            h = torch.cat(h, dim=0)
+            h = h.view(h.size(0), self.input_steps * self.coord_units // self.n_objs // 2)
+            h = self.init_vel_mlp(h)
+            h = torch.split(h, self.n_objs, dim=0)
+            h = torch.cat(h, dim=1)
+        return h
 
 
 class ConvolutionalEncoder(pnn.Module):
