@@ -5,21 +5,17 @@ import torch
 
 def stn(U, theta, out_size):
     U_pytorch = U#.permute(0, 3, 1, 2).clone().detach()
-    print("U shape", U.shape)
-    print("theta shape", theta.shape)
 
     num_batch = theta.size(0)
     num_transforms = theta.size(1)
     num_channels = U.size(1)
     theta = theta.view(-1, 2, 3)  # Reshape theta to have shape (num_batch*num_transforms, 2, 3)
-    print("theta shape", theta.shape)
     # Adjust the size to match the expected dimensions
-    size = torch.Size((num_batch * num_transforms, num_channels, *out_size))
-    input()
+    size = torch.Size((num_batch, num_channels, *out_size))
     grid = F.affine_grid(theta, size)
     output = F.grid_sample(U, grid)
 
-    return output.permute(0, 2, 3, 1)  # Transpose dimensions to match expected shape
+    return output #output.permute(0, 2, 3, 1)  # Transpose dimensions to match expected shape
 
 def batch_transformer(U, thetas, out_size):
     U_pytorch = U#.permute(0, 3, 1, 2).clone().detach()
