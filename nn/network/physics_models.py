@@ -242,7 +242,7 @@ class PhysicsNet(BaseNet):
             out_join = stn(torch.tile(join, [inp.shape[0], 1, 1, 1]), theta, self.conv_input_shape[1:])
             out_temp_cont.append(torch.split(out_join, 2, -1))
 
-        background_content = variable_from_network([1]+self.input_shape)
+        background_content = torch.randn(1,*self.input_shape)
         self.background_content = pnn.Sigmoid()(background_content)
         background_content = torch.tile(self.background_content, [batch_size, 1, 1, 1])
         contents = [p[1] for p in out_temp_cont]
@@ -251,8 +251,8 @@ class PhysicsNet(BaseNet):
 
         background_mask = torch.ones_like(out_temp_cont[0][0])
         masks = torch.stack([p[0]-5 for p in out_temp_cont]+[background_mask], dim=-1)
-        masks = torch.Softmax()(masks, dim=-1)
-        masks = torch.unstack(masks, dim=-1)
+        masks = masks.softmax(dim=-1)
+        masks = torch.unbind(masks, dim=-1)
         self.transf_masks = masks
 
         out = sum([m*c for m, c in zip(masks, contents)])
