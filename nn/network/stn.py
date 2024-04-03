@@ -237,7 +237,7 @@ def stn(U, theta, out_size):
     theta = theta.view(-1, 2, 3)  # Reshape theta to have shape (num_batch*num_transforms, 2, 3)
     print(theta.shape)
     # Adjust the size to match the expected dimensions
-    size = torch.Size((num_batch * num_transforms, num_channels, *out_size))
+    size = torch.Size((num_batch, num_channels, *out_size))
     print("size=", size)
     grid = F.affine_grid(theta, size)
     output = F.grid_sample(U_pytorch, grid)
