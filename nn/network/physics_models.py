@@ -10,7 +10,7 @@ import torch
 import torch.nn as pnn
 
 from nn.network.base import BaseNet, OPTIMIZERS
-from nn.network.blocks import UNet, ShallowUNet, variable_from_network, ConvolutionalEncoder
+from nn.network.blocks import UNet, ShallowUNet, variable_from_network, ConvolutionalEncoder, VelocityEncoder
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
 from nn.utils.viz import gallery, gif
@@ -100,6 +100,8 @@ class PhysicsNet(BaseNet):
         ############
 
         self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs)
+        # TODO check inputs to velocity encoder
+        self.velocity_encoder_block = VelocityEncoder(self.n_objs, self.coord_units//2, self.alt_vel)
         
         # for decoder 
         self.log_sig = 1.0
