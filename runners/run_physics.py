@@ -64,16 +64,17 @@ if __name__ == "__main__":
                        FLAGS.autoencoder_loss, FLAGS.alt_vel, FLAGS.color, 
                        input_size, FLAGS.encoder_type, FLAGS.decoder_type)
 
-        network.build_graph()
-        # print(list(network.parameters()))
-        network.build_optimizer(FLAGS.base_lr, FLAGS.optimizer, FLAGS.anneal_lr)
-        network.initialize_graph(FLAGS.save_dir, FLAGS.use_ckpt, FLAGS.ckpt_dir)
-
         data_iterators = get_iterators(
                               os.path.join(
                                   os.path.dirname(os.path.realpath(__file__)), 
                                   "../data/datasets/%s"%data_file), conv=True, datapoints=FLAGS.datapoints)
         network.get_data(data_iterators)
+
+        network.build_graph()
+        # print(list(network.parameters()))
+        network.build_optimizer(FLAGS.base_lr, FLAGS.optimizer, FLAGS.anneal_lr)
+        network.initialize_graph(FLAGS.save_dir, FLAGS.use_ckpt, FLAGS.ckpt_dir)
+
         network.train(FLAGS.epochs, FLAGS.batch_size, FLAGS.save_every_n_epochs, FLAGS.eval_every_n_epochs,
                     FLAGS.print_interval, FLAGS.debug)
         

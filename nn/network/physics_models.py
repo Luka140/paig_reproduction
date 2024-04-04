@@ -24,7 +24,7 @@ CELLS = {
     "bouncing_ode_cell": bouncing_ode_cell,
     "spring_ode_cell": spring_ode_cell,
     "gravity_ode_cell": gravity_ode_cell,
-    "lstm": tf.compat.v1.nn.rnn_cell.LSTMCell
+    "lstm": pnn.LSTMCell
 }
 
 # total number of latent units for each datasets
@@ -114,40 +114,43 @@ class PhysicsNet(BaseNet):
 
     def compute_loss(self):
 
-        loss = torch.nn.CrossEntropyLoss()
+        # loss = torch.nn.CrossEntropyLoss()
 
         # Compute reconstruction loss
         recons_target = self.input[:,:self.input_steps+self.pred_steps]
-        output = loss(self.recons_out, recons_target)
-        # TODO check if this correct
-        return output, [[output],  [], []]
+        # output = loss(self.recons_out, recons_target)
 
-        # recons_loss = torch.square(recons_target-self.recons_out)
-        # #recons_ce_loss = -(recons_target*tf.log(self.recons_out+1e-7) + (1.0-recons_target)*tf.log(1.0-self.recons_out+1e-7))
-        # print("\n\n\n\n\n\n\n check")
-        # recons_loss = torch.sum(recons_loss, dim=[2,3,4])
 
-        # self.recons_loss = torch.mean(recons_loss)
+        recons_loss = torch.square(recons_target-self.recons_out)
+        #recons_ce_loss = -(recons_target*tf.log(self.recons_out+1e-7) + (1.0-recons_target)*tf.log(1.0-self.recons_out+1e-7))
 
-        # target = self.input[:,self.input_steps:]
-        # #ce_loss = -(target*tf.log(self.output+1e-7) + (1.0-target)*tf.log(1.0-self.output+1e-7))
-        # loss = torch.square(target-self.output)
-        # loss = torch.sum(loss, dim=[2,3,4])
+        recons_loss = torch.sum(recons_loss, dim=[2,3,4])
 
-        # # Compute prediction losses. pred_loss is used for training, extrap_loss is used for evaluation
-        # self.pred_loss = torch.mean(loss[:,:self.pred_steps])
-        # self.extrap_loss = torch.mean(loss[:,self.pred_steps:])
+        self.recons_loss = torch.mean(recons_loss)
 
-        # train_loss = self.pred_loss
-        # if self.autoencoder_loss > 0.0:
-        #     train_loss += self.autoencoder_loss*self.recons_loss
+        target = self.input[:,self.input_steps:]
+        #ce_loss = -(target*tf.log(self.output+1e-7) + (1.0-target)*tf.log(1.0-self.output+1e-7))
+        loss = torch.square(target-self.output)
+        loss = torch.sum(loss, dim=[2,3,4])
 
-        # eval_losses = [self.pred_loss, self.extrap_loss, self.recons_loss]
-        # return train_loss, eval_losses
+        # Compute prediction losses. pred_loss is used for training, extrap_loss is used for evaluation
+        self.pred_loss = torch.mean(loss[:,:self.pred_steps])
+        self.extrap_loss = torch.mean(loss[:,self.pred_steps:])
+
+        train_loss = self.pred_loss
+        if self.autoencoder_loss > 0.0:
+            train_loss += self.autoencoder_loss*self.recons_loss
+
+        eval_losses = [self.pred_loss, self.extrap_loss, self.recons_loss]
+        return train_loss, eval_losses
 
     def build_graph(self):
         tf.compat.v1.disable_eager_execution()
-        self.input = tf.compat.v1.placeholder(tf.float32, shape=[None, self.seq_len]+self.input_shape)
+        # self.input = tf.compat.v1.placeholder(tf.float32, shape=[None, self.seq_len]+self.input_shape)
+        # TODO Placeholder ====================================================================================
+        batch_size = 100
+        self.input = torch.randn(batch_size, self.seq_len, *self.input_shape)
+        # TODO Placeholder ====================================================================================
         self.output = self.conv_feedforward()
 
         self.train_loss, self.eval_losses = self.compute_loss()
@@ -251,8 +254,8 @@ class PhysicsNet(BaseNet):
         rollout_cell = self.cell(self.coord_units//2, self.coord_units//2)
 
         # TODO: PLACEHOLDER
-        batch_size = 1000
-        self.input = torch.randn(batch_size, 12, 3, 32, 32)
+        # batch_size = 1000
+        # self.input = torch.randn(batch_size, 12, 3, 32, 32)
 
         # Encode all the input and train frames
         # sequence length and batch get flattened together in dim0
@@ -312,11 +315,12 @@ class PhysicsNet(BaseNet):
         if hasattr(self, 'pos_vel_seq'):
             fetches.append(self.pos_vel_seq)
 
-        res = self.sess.run(fetches, feed_dict=feed_dict)
-        output_seq = res[0]
-        recons_seq = res[1]
+        res = fetches
+        output_seq = res[0].detach().numpy()
+        recons_seq = res[1].detach().numpy()
         if hasattr(self, 'pos_vel_seq'):
             pos_vel_seq = res[2]
+        # print("\n\n\n", batch_x.shape, batch_x[:,:self.input_steps].shape, output_seq.shape)
         output_seq = np.concatenate([batch_x[:,:self.input_steps], output_seq], axis=1)
         recons_seq = np.concatenate([recons_seq, np.zeros((batch_size, self.extrap_steps)+recons_seq.shape[2:])], axis=1)
 
