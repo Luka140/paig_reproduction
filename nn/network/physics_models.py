@@ -205,14 +205,14 @@ class PhysicsNet(BaseNet):
         # it easier for the model to discover objects in some cases.
         # I haven't found this to make a consistent difference though. 
         # logsigma = tf.compat.v1.get_variable("logsigma", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
-        logsigma = self.log_sig
+        logsigma = np.log(self.log_sig)
         sigma = np.exp(logsigma)
         
         #TODO i think this is supposed to be the background - whats up with the tile though - why +5?
         
         # TODO maybe swap the channel dim to spot 1 later in the torch.randn calls
         # template = variable_from_network([self.n_objs, tmpl_size, tmpl_size, 1])
-        template = torch.randn([self.n_objs, tmpl_size, tmpl_size, 1])
+        template = torch.randn([self.n_objs, 1, tmpl_size, tmpl_size])
         self.template = template
         template = torch.tile(template, [1,1,1,3])+5
         
@@ -233,14 +233,14 @@ class PhysicsNet(BaseNet):
 
             theta0 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
             theta1 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
-            theta2 = (self.conv_input_shape[0]/2-loc[:,0])/tmpl_size*sigma
+            theta2 = (self.conv_input_shape[1]/2-loc[:,0])/tmpl_size*sigma
             theta3 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
             theta4 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
-            theta5 = (self.conv_input_shape[0]/2-loc[:,1])/tmpl_size*sigma
+            theta5 = (self.conv_input_shape[1]/2-loc[:,1])/tmpl_size*sigma
             theta = torch.stack([theta0, theta1, theta2, theta3, theta4, theta5], dim=1)
 
             out_join = stn(torch.tile(join, [inp.shape[0], 1, 1, 1]), theta, self.conv_input_shape[1:])
-            out_temp_cont.append(torch.split(out_join, 2, -1))
+            out_temp_cont.append(torch.chunk(out_join, 2, -1))
 
         background_content = torch.randn(1,*self.input_shape)
         self.background_content = pnn.Sigmoid()(background_content)
@@ -250,9 +250,9 @@ class PhysicsNet(BaseNet):
         self.transf_contents = contents
 
         background_mask = torch.ones_like(out_temp_cont[0][0])
-        masks = torch.stack([p[0]-5 for p in out_temp_cont]+[background_mask], dim=-1)
+        masks = torch.stack([p[0]-5 for p in out_temp_cont]+[background_mask], dim=1)
         masks = masks.softmax(dim=-1)
-        masks = torch.unbind(masks, dim=-1)
+        masks = torch.unbind(masks, dim=1)
         self.transf_masks = masks
 
         out = sum([m*c for m, c in zip(masks, contents)])

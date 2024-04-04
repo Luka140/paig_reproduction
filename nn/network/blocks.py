@@ -29,21 +29,21 @@ class VelocityEncoder(pnn.Module):
 
     def forward(self, inp):
         if self.alt_vel:
-            h = torch.split(inp, self.input_steps, dim=1)
+            h = torch.chunk(inp, self.input_steps, dim=1)
             h = [h[i + 1] - h[i] for i in range(self.input_steps - 1)]
             h = torch.cat(h, dim=1)
-            h = torch.split(h, self.n_objs, dim=2)
+            h = torch.chunk(h, self.n_objs, dim=2)
             h = torch.cat(h, dim=0)
             h = h.view(h.size(0), (self.input_steps - 1) * 2)
             h = self.init_vel_linear(h)
-            h = torch.split(h, self.n_objs, dim=0)
+            h = torch.chunk(h, self.n_objs, dim=0)
             h = torch.cat(h, dim=1)
         else:
-            h = torch.split(inp, self.n_objs, dim=2)
+            h = torch.chunk(inp, self.n_objs, dim=2)
             h = torch.cat(h, dim=0)
             h = h.view(h.size(0), self.input_steps * self.coord_units // self.n_objs // 2)
             h = self.init_vel_mlp(h)
-            h = torch.split(h, self.n_objs, dim=0)
+            h = torch.chunk(h, self.n_objs, dim=0)
             h = torch.cat(h, dim=1)
         return h
 
@@ -97,7 +97,7 @@ class ConvolutionalEncoder(pnn.Module):
         x = self.relu(self.l1(x))
         x = self.relu(self.l2(x))
         x = self.l3(x)
-        x = torch.concat(torch.split(x, self.n_objs, 0), dim=1)
+        x = torch.concat(torch.chunk(x, self.n_objs, 0), dim=1)
         x = self.tanh(x) * (self.input_shape[0] / 2) + (self.input_shape[0] / 2)
         return x, enc_masks, masked_objs
 
