@@ -101,7 +101,7 @@ class PhysicsNet(BaseNet):
 
         self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs)
         # TODO check inputs to velocity encoder
-        self.velocity_encoder_block = VelocityEncoder(self.n_objs, self.coord_units//2, self.alt_vel)
+        self.velocity_encoder_block = VelocityEncoder(self.alt_vel, self.input_steps, self.n_objs, self.coord_units)
         
         # for decoder 
         self.log_sig = 1.0
@@ -301,7 +301,7 @@ class PhysicsNet(BaseNet):
             pos, vel = rollout_cell(pos, vel)
 
             # decode
-            out = self.decoder(pos, scope=tvs)
+            out = self.decoder(pos)
 
             pos_vel_seq.append(tf.concat([pos, vel], axis=1))
             output_seq.append(out)

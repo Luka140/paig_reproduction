@@ -5,21 +5,22 @@ import logging
 import numpy as np
 import tensorflow as tf
 from nn.utils.misc import log_metrics, zipdir
+import torch
 
 logger = logging.getLogger("tf")
 root_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..")
 
 OPTIMIZERS = {
-    "adam": tf.compat.v1.train.AdamOptimizer,
-    "rmsprop": tf.compat.v1.train.RMSPropOptimizer,
-    "momentum": lambda x: tf.compat.v1.train.MomentumOptimizer(x, 0.9),
-    "sgd": tf.compat.v1.train.GradientDescentOptimizer
+    "adam": torch.optim.Adam,
+    "rmsprop": torch.optim.RMSprop,
+   "momentum": lambda params, lr: torch.optim.SGD(params, momentum=0.9, lr=lr),
+    "sgd": torch.optim.SGD
 }
 
 
-class BaseNet:
-
+class BaseNet(torch.nn.Module):
     def __init__(self):
+        super(BaseNet, self).__init__()
         self.train_metrics = {}
         self.eval_metrics = {}
         
