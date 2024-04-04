@@ -4,6 +4,7 @@ import shutil
 import logging
 import numpy as np
 import tensorflow as tf
+import torch
 
 from nn.utils.misc import log_metrics, zipdir
 
@@ -11,16 +12,17 @@ logger = logging.getLogger("tf")
 root_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..")
 
 OPTIMIZERS = {
-    "adam": tf.compat.v1.train.AdamOptimizer,
-    "rmsprop": tf.compat.v1.train.RMSPropOptimizer,
-    "momentum": lambda x: tf.compat.v1.train.MomentumOptimizer(x, 0.9),
-    "sgd": tf.compat.v1.train.GradientDescentOptimizer
+    "adam": lambda params, lr: torch.optim.Adam(params, lr=lr),
+    "rmsprop": lambda params, lr: torch.optim.RMSprop(params, lr=lr),
+   "momentum": lambda params, lr: torch.optim.SGD(params, momentum=0.9, lr=lr),
+    "sgd": lambda params, lr: torch.optim.SGD(params, lr=lr)
 }
 
 
-class BaseNet:
+class BaseNet(torch.nn.Module):
 
     def __init__(self):
+        super(BaseNet, self).__init__()
         self.train_metrics = {}
         self.eval_metrics = {}
         
@@ -75,7 +77,7 @@ class BaseNet:
                          ckpt_dir=""):
 
         self.save_dir = save_dir
-        self.saver = tf.compat.v1.train.Saver()
+        # self.saver = tf.compat.v1.train.Saver()
         if os.path.exists(save_dir):
             if use_ckpt:
                 restore = True
@@ -97,11 +99,11 @@ class BaseNet:
                 restore = False
 
         # restore = False # TODO: REMOVE THIS LINE LATER, SOMEHOW RESTORE IS SET TO TRUE CAUSING ERRORS
-        if restore:
-            self.saver.restore(self.sess, os.path.join(restore_dir, "model.ckpt"))
-            self.sess.run(self.lr.assign(self.base_lr))
-        else:
-            self.sess.run(tf.compat.v1.global_variables_initializer())
+        # if restore:
+        #     # self.saver.restore(self.sess, os.path.join(restore_dir, "model.ckpt"))
+        #     self.sess.run(self.lr.assign(self.base_lr))
+        # else:
+        #     self.sess.run(tf.compat.v1.global_variables_initializer())
 
     def build_optimizer(self, base_lr, optimizer="adam", anneal_lr=True):
         self.base_lr = base_lr
@@ -186,14 +188,16 @@ class BaseNet:
             fetches = {k:v for k, v in self.eval_metrics.items()}
             fetches["output"] = self.output
             fetches["input"] = self.input
-            results = self.sess.run(fetches, feed_dict=feed_dict)
+            # TODO misschien is dit wel nodig? wie weet
+            # results = self.sess.run(fetches, feed_dict=feed_dict)
+
 
             for k in self.eval_metrics.keys():
-                eval_metrics_results[k].append(results[k])
-            eval_outputs["input"].append(results["input"])
-            eval_outputs["output"].append(results["output"])
+                eval_metrics_results[k].append(fetches[k])
+            eval_outputs["input"].append(fetches["input"])
+            eval_outputs["output"].append(fetches["output"])
 
-        eval_metrics_results = {k:np.mean(v, axis=0) for k,v in eval_metrics_results.items()}
+        eval_metrics_results = {k:np.mean([if i.empty() i[0].detach().numpy() for i in v], axis=0) for k,v in eval_metrics_results.items()}
         np.savez_compressed(os.path.join(self.save_dir, "outputs.npz"), 
                             input=np.concatenate(eval_outputs["input"], axis=0),
                             output=np.concatenate(eval_outputs["output"], axis=0))

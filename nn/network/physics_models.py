@@ -114,30 +114,36 @@ class PhysicsNet(BaseNet):
 
     def compute_loss(self):
 
+        loss = torch.nn.CrossEntropyLoss()
+
         # Compute reconstruction loss
         recons_target = self.input[:,:self.input_steps+self.pred_steps]
-        recons_loss = torch.square(recons_target-self.recons_out)
-        #recons_ce_loss = -(recons_target*tf.log(self.recons_out+1e-7) + (1.0-recons_target)*tf.log(1.0-self.recons_out+1e-7))
-        print("\n\n\n\n\n\n\n check")
-        recons_loss = torch.sum(recons_loss, dim=[2,3,4])
+        output = loss(self.recons_out, recons_target)
+        # TODO check if this correct
+        return output, [[output],  [], []]
 
-        self.recons_loss = torch.mean(recons_loss)
+        # recons_loss = torch.square(recons_target-self.recons_out)
+        # #recons_ce_loss = -(recons_target*tf.log(self.recons_out+1e-7) + (1.0-recons_target)*tf.log(1.0-self.recons_out+1e-7))
+        # print("\n\n\n\n\n\n\n check")
+        # recons_loss = torch.sum(recons_loss, dim=[2,3,4])
 
-        target = self.input[:,self.input_steps:]
-        #ce_loss = -(target*tf.log(self.output+1e-7) + (1.0-target)*tf.log(1.0-self.output+1e-7))
-        loss = torch.square(target-self.output)
-        loss = torch.sum(loss, dim=[2,3,4])
+        # self.recons_loss = torch.mean(recons_loss)
 
-        # Compute prediction losses. pred_loss is used for training, extrap_loss is used for evaluation
-        self.pred_loss = torch.mean(loss[:,:self.pred_steps])
-        self.extrap_loss = torch.mean(loss[:,self.pred_steps:])
+        # target = self.input[:,self.input_steps:]
+        # #ce_loss = -(target*tf.log(self.output+1e-7) + (1.0-target)*tf.log(1.0-self.output+1e-7))
+        # loss = torch.square(target-self.output)
+        # loss = torch.sum(loss, dim=[2,3,4])
 
-        train_loss = self.pred_loss
-        if self.autoencoder_loss > 0.0:
-            train_loss += self.autoencoder_loss*self.recons_loss
+        # # Compute prediction losses. pred_loss is used for training, extrap_loss is used for evaluation
+        # self.pred_loss = torch.mean(loss[:,:self.pred_steps])
+        # self.extrap_loss = torch.mean(loss[:,self.pred_steps:])
 
-        eval_losses = [self.pred_loss, self.extrap_loss, self.recons_loss]
-        return train_loss, eval_losses
+        # train_loss = self.pred_loss
+        # if self.autoencoder_loss > 0.0:
+        #     train_loss += self.autoencoder_loss*self.recons_loss
+
+        # eval_losses = [self.pred_loss, self.extrap_loss, self.recons_loss]
+        # return train_loss, eval_losses
 
     def build_graph(self):
         tf.compat.v1.disable_eager_execution()
@@ -153,23 +159,28 @@ class PhysicsNet(BaseNet):
 
     def build_optimizer(self, base_lr, optimizer="rmsprop", anneal_lr=True):
         # Uncomment lines below to have different learning rates for physics and vision components
-
+        # TODO dit moet gefixt worden via base branch met nieuwe FLAGs
+        # base_lr = 1e-2
         self.base_lr = base_lr
         self.anneal_lr = anneal_lr
-        self.lr = tf.Variable(base_lr, trainable=False, name="base_lr")
-        self.optimizer = OPTIMIZERS[optimizer](self.lr)
+        # self.lr = tf.Variable(base_lr, trainable=False, name="base_lr")
+        self.lr = base_lr
+        self.optimizer = OPTIMIZERS[optimizer](self.parameters(), self.lr)
         #self.dyn_optimizer = OPTIMIZERS[optimizer](1e-3)
 
-        update_ops = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)
-        with tf.control_dependencies(update_ops):
-            gvs = self.optimizer.compute_gradients(self.loss, var_list=tf.compat.v1.trainable_variables())
-            gvs = [(tf.clip_by_value(grad, -1.0, 1.0), var) for grad, var in gvs if grad is not None]
-            self.train_op = self.optimizer.apply_gradients(gvs)
 
-            # self.train_op = self.optimizer.apply_gradients([gv for gv in gvs if "cell" not in gv[1].name])
-            # if len([gv for gv in gvs if "cell" in gv[1].name]) > 0:
-            #     self.dyn_train_op = self.dyn_optimizer.apply_gradients([gv for gv in gvs if "cell" in gv[1].name])
-            #     self.train_op = tf.group(self.train_op, self.dyn_train_op)
+        # print(list(self.parameters()))
+        self.loss.backward()
+        gvs = self.optimizer.step()
+
+        # gvs = self.optimizer.compute_gradients(self.loss, var_list=tf.compat.v1.trainable_variables())
+        # gvs = [(tf.clip_by_value(grad, -1.0, 1.0), var) for grad, var in gvs if grad is not None]
+        # self.train_op = self.optimizer.apply_gradients(gvs)
+
+        # self.train_op = self.optimizer.apply_gradients([gv for gv in gvs if "cell" not in gv[1].name])
+        # if len([gv for gv in gvs if "cell" in gv[1].name]) > 0:
+        #     self.dyn_train_op = self.dyn_optimizer.apply_gradients([gv for gv in gvs if "cell" in gv[1].name])
+        #     self.train_op = tf.group(self.train_op, self.dyn_train_op)
 
     def conv_st_decoder(self, inp):
         batch_size = inp.shape[0]

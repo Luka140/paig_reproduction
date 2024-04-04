@@ -65,6 +65,7 @@ if __name__ == "__main__":
                        input_size, FLAGS.encoder_type, FLAGS.decoder_type)
 
         network.build_graph()
+        # print(list(network.parameters()))
         network.build_optimizer(FLAGS.base_lr, FLAGS.optimizer, FLAGS.anneal_lr)
         network.initialize_graph(FLAGS.save_dir, FLAGS.use_ckpt, FLAGS.ckpt_dir)
 
