@@ -290,7 +290,9 @@ class PhysicsNet(BaseNet):
         with tf.compat.v1.variable_scope("net") as tvs:
             lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
             states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
+            print('self.coord_units:', self.coord_units//2)
             rollout_cell = self.cell(self.coord_units//2)
+            #rollout_cell = self.cell(self.coord_units//2, self.coord_units//2)
 
             # Encode all the input and train frames
             h = tf.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
@@ -318,7 +320,6 @@ class PhysicsNet(BaseNet):
             for t in range(self.pred_steps+self.extrap_steps):
                 # rollout
                 pos, vel = rollout_cell(pos, vel)
-
                 # decode
                 out = self.decoder(pos, scope=tvs)
 

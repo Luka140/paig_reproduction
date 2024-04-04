@@ -94,3 +94,5 @@ if __name__ == "__main__":
     network.get_data(data_iterators)
     network.train(0, FLAGS.batch_size, FLAGS.save_every_n_epochs, FLAGS.eval_every_n_epochs,
                 FLAGS.print_interval, FLAGS.debug)
+    
+
