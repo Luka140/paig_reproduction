@@ -249,7 +249,6 @@ class PhysicsNet(BaseNet):
         lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
         states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
         rollout_cell = self.cell(self.coord_units//2, self.coord_units//2)
-        print(self.input.shape)
 
         # TODO: PLACEHOLDER
         batch_size = 1000

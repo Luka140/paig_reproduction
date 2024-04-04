@@ -174,7 +174,8 @@ class BaseNet(torch.nn.Module):
     def eval(self,
              batch_size,
              type='valid'):
-
+        print(self.eval_metrics.keys(),"\n\n\n")
+        print(self.eval_metrics.items())
         eval_metrics_results = {k:[] for k in self.eval_metrics.keys()}
         eval_outputs = {"input":[], "output":[]}
         
@@ -197,7 +198,7 @@ class BaseNet(torch.nn.Module):
             eval_outputs["input"].append(fetches["input"])
             eval_outputs["output"].append(fetches["output"])
 
-        eval_metrics_results = {k:np.mean([if i.empty() i[0].detach().numpy() for i in v], axis=0) for k,v in eval_metrics_results.items()}
+        eval_metrics_results = {k:np.mean([i[0].detach().numpy() for i in v], axis=0) for k,v in eval_metrics_results.items()}
         np.savez_compressed(os.path.join(self.save_dir, "outputs.npz"), 
                             input=np.concatenate(eval_outputs["input"], axis=0),
                             output=np.concatenate(eval_outputs["output"], axis=0))
