@@ -116,20 +116,21 @@ class PhysicsNet(BaseNet):
 
         # Compute reconstruction loss
         recons_target = self.input[:,:self.input_steps+self.pred_steps]
-        recons_loss = tf.square(recons_target-self.recons_out)
+        recons_loss = torch.square(recons_target-self.recons_out)
         #recons_ce_loss = -(recons_target*tf.log(self.recons_out+1e-7) + (1.0-recons_target)*tf.log(1.0-self.recons_out+1e-7))
-        recons_loss = tf.reduce_sum(recons_loss, axis=[2,3,4])
+        print("\n\n\n\n\n\n\n check")
+        recons_loss = torch.sum(recons_loss, dim=[2,3,4])
 
-        self.recons_loss = tf.reduce_mean(recons_loss)
+        self.recons_loss = torch.mean(recons_loss)
 
         target = self.input[:,self.input_steps:]
         #ce_loss = -(target*tf.log(self.output+1e-7) + (1.0-target)*tf.log(1.0-self.output+1e-7))
-        loss = tf.square(target-self.output)
-        loss = tf.reduce_sum(loss, axis=[2,3,4])
+        loss = torch.square(target-self.output)
+        loss = torch.sum(loss, dim=[2,3,4])
 
         # Compute prediction losses. pred_loss is used for training, extrap_loss is used for evaluation
-        self.pred_loss = tf.reduce_mean(loss[:,:self.pred_steps])
-        self.extrap_loss = tf.reduce_mean(loss[:,self.pred_steps:])
+        self.pred_loss = torch.mean(loss[:,:self.pred_steps])
+        self.extrap_loss = torch.mean(loss[:,self.pred_steps:])
 
         train_loss = self.pred_loss
         if self.autoencoder_loss > 0.0:
@@ -169,33 +170,6 @@ class PhysicsNet(BaseNet):
             # if len([gv for gv in gvs if "cell" in gv[1].name]) > 0:
             #     self.dyn_train_op = self.dyn_optimizer.apply_gradients([gv for gv in gvs if "cell" in gv[1].name])
             #     self.train_op = tf.group(self.train_op, self.dyn_train_op)
-
-    # def vel_encoder(self, inp, scope=None, reuse=tf.compat.v1.AUTO_REUSE):
-    #     with tf.compat.v1.variable_scope(scope or tf.compat.v1.get_variable_scope(), reuse=reuse):
-    #         with tf.compat.v1.variable_scope("init_vel"):
-    #             if self.alt_vel:
-    #                 # Computes velocity as a linear combination of the differences
-    #                 # between previous time-steps
-    #                 h = tf.split(inp, self.input_steps, 1)
-    #                 h = [h[i+1]-h[i] for i in range(self.input_steps-1)]
-    #                 h = tf.concat(h, axis=1)
-    #                 h = tf.split(h, self.n_objs, 2)
-    #                 h = tf.concat(h, axis=0)
-    #                 h = tf.reshape(h, [tf.shape(h)[0], (self.input_steps-1)*2])
-    #                 h = tf.compat.v1.layers.dense(h, 2, activation=None)
-    #                 h = tf.split(h, self.n_objs, 0)
-    #                 h = tf.concat(h, axis=1)
-    #             else:
-    #                 # Computes velocity using an MLP with positions as input
-    #                 h = tf.split(inp, self.n_objs, 2)
-    #                 h = tf.concat(h, axis=0)
-    #                 h = tf.reshape(h, [tf.shape(h)[0], self.input_steps*self.coord_units//self.n_objs//2])
-    #                 h = tf.compat.v1.layers.dense(h, 100, activation=tf.tanh)
-    #                 h = tf.compat.v1.layers.dense(h, 100, activation=tf.tanh)
-    #                 h = tf.compat.v1.layers.dense(h, self.coord_units//self.n_objs//2, activation=None)
-    #                 h = tf.split(h, self.n_objs, 0)
-    #                 h = tf.concat(h, axis=1)
-    #     return h
 
     def conv_st_decoder(self, inp):
         batch_size = inp.shape[0]
@@ -259,61 +233,60 @@ class PhysicsNet(BaseNet):
         return out
 
     def conv_feedforward(self):
-        with tf.compat.v1.variable_scope("net") as tvs:
 
-            # TODO: what do the lines below do?
-            lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
-            states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
-            rollout_cell = self.cell(self.coord_units//2)
-            print(self.input.shape)
+        # TODO: what do the lines below do? - this is still tensorflow code but somehow doesnt throw an error
+        lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
+        states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
+        rollout_cell = self.cell(self.coord_units//2, self.coord_units//2)
+        print(self.input.shape)
 
-            # TODO: PLACEHOLDER
-            batch_size = 1000
-            self.input = torch.randn(batch_size, 12, 3, 32, 32)
+        # TODO: PLACEHOLDER
+        batch_size = 1000
+        self.input = torch.randn(batch_size, 12, 3, 32, 32)
 
-            # Encode all the input and train frames
-            # sequence length and batch get flattened together in dim0
-            h = torch.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
-            # TODO placeholder atm
-            # h = torch.randn([batch_]+self.input_shape)
-            enc_pos, self.enc_masks, self.enc_objs = self.encoder(h)
+        # Encode all the input and train frames
+        # sequence length and batch get flattened together in dim0
+        h = torch.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
+        # TODO placeholder atm
+        # h = torch.randn([batch_]+self.input_shape)
+        enc_pos, self.enc_masks, self.enc_objs = self.encoder(h)
 
-            # decode the input and pred frames
-            recons_out = self.decoder(enc_pos)
+        # decode the input and pred frames
+        recons_out = self.decoder(enc_pos)
 
-            # self.recons_out = tf.reshape(recons_out,
-            #                              [tf.shape(self.input)[0], self.input_steps+self.pred_steps]+self.input_shape)
-            self.recons_out = torch.reshape(recons_out, [self.input.shape[0], self.input_steps+self.pred_steps]+self.input_shape)
-            # self.enc_pos = tf.reshape(enc_pos,
-            #                           [tf.shape(self.input)[0], self.input_steps+self.pred_steps, self.coord_units//2])
+        # self.recons_out = tf.reshape(recons_out,
+        #                              [tf.shape(self.input)[0], self.input_steps+self.pred_steps]+self.input_shape)
+        self.recons_out = torch.reshape(recons_out, [self.input.shape[0], self.input_steps+self.pred_steps]+self.input_shape)
+        # self.enc_pos = tf.reshape(enc_pos,
+        #                           [tf.shape(self.input)[0], self.input_steps+self.pred_steps, self.coord_units//2])
 
-            self.enc_pos = torch.reshape(enc_pos, [self.input.shape[0], self.input_steps+self.pred_steps, self.coord_units//2])
+        self.enc_pos = torch.reshape(enc_pos, [self.input.shape[0], self.input_steps+self.pred_steps, self.coord_units//2])
 
-            if self.input_steps > 1:
-                vel = self.velocity_encoder(self.enc_pos[:,:self.input_steps])
-            else:
-                vel = tf.zeros([tf.shape(self.input)[0], self.coord_units//2])
+        if self.input_steps > 1:
+            vel = self.velocity_encoder(self.enc_pos[:,:self.input_steps])
+        else:
+            vel = torch.zeros([self.input.shape[0], self.coord_units//2])
 
-            pos = self.enc_pos[:,self.input_steps-1]
-            output_seq = []
-            pos_vel_seq = []
+        pos = self.enc_pos[:,self.input_steps-1]
+        output_seq = []
+        pos_vel_seq = []
+        pos_vel_seq.append(torch.cat([pos, vel], dim=1))
+
+        # rollout ODE and decoder
+        for t in range(self.pred_steps+self.extrap_steps):
+            # rollout
+            pos, vel = rollout_cell(pos, vel)
+
+            # decode
+            out = self.decoder(pos)
+
             pos_vel_seq.append(torch.cat([pos, vel], dim=1))
+            output_seq.append(out)
 
-            # rollout ODE and decoder
-            for t in range(self.pred_steps+self.extrap_steps):
-                # rollout
-                pos, vel = rollout_cell(pos, vel)
-
-                # decode
-                out = self.decoder(pos, scope=tvs)
-
-                pos_vel_seq.append(torch.cat([pos, vel], dim=1))
-                output_seq.append(out)
-
-            # current_scope = tf.compat.v1.get_default_graph().get_name_scope()
-            # self.network_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,
-            #                                       scope=current_scope)
-            # logger.info(self.network_vars)
+        # current_scope = tf.compat.v1.get_default_graph().get_name_scope()
+        # self.network_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,
+        #                                       scope=current_scope)
+        # logger.info(self.network_vars)
 
         output_seq = torch.stack(output_seq)
         pos_vel_seq = torch.stack(pos_vel_seq)
