@@ -100,8 +100,9 @@ class PhysicsNet(BaseNet):
         ############
 
         self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs)
-        self.vel_encoder_block = VelocityEncoder(self.alt_vel, self.input_steps, self.n_objs, self.coord_units)
-
+        # TODO check inputs to velocity encoder
+        self.velocity_encoder_block = VelocityEncoder(self.n_objs, self.coord_units//2, self.alt_vel)
+        
         # for decoder 
         self.log_sig = 1.0
 
@@ -214,23 +215,18 @@ class PhysicsNet(BaseNet):
         # template = variable_from_network([self.n_objs, tmpl_size, tmpl_size, 1])
         template = torch.randn([self.n_objs, 1, tmpl_size, tmpl_size])
         self.template = template
-        template = torch.tile(template, [1,1,1,3])+5
+        template = torch.tile(template, [1,3,1,1])+5
         
         # Non background objects
         # contents = variable_from_network([self.n_objs, tmpl_size, tmpl_size, self.conv_ch])
-        contents = torch.randn([self.n_objs, tmpl_size, tmpl_size, self.conv_ch])
+        contents = torch.randn([self.n_objs, self.conv_ch, tmpl_size, tmpl_size])
         self.contents = contents 
         contents = pnn.Sigmoid()(contents)
-        joint = torch.concat([template, contents], dim=-1)
-        print("joint", joint.shape)
-        print("inp", inp.shape)
-        print("self.output", self.conv_input_shape)
+        joint = torch.concat([template, contents], dim=1)
 
         out_temp_cont = []
 
         for loc, join in zip(torch.chunk(inp, self.n_objs, -1), torch.chunk(joint, self.n_objs, 0)):
-            print("loc, join", loc.shape, join.shape)
-
             theta0 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
             theta1 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
             theta2 = (self.conv_input_shape[1]/2-loc[:,0])/tmpl_size*sigma
@@ -238,9 +234,8 @@ class PhysicsNet(BaseNet):
             theta4 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
             theta5 = (self.conv_input_shape[1]/2-loc[:,1])/tmpl_size*sigma
             theta = torch.stack([theta0, theta1, theta2, theta3, theta4, theta5], dim=1)
-
             out_join = stn(torch.tile(join, [inp.shape[0], 1, 1, 1]), theta, self.conv_input_shape[1:])
-            out_temp_cont.append(torch.chunk(out_join, 2, -1))
+            out_temp_cont.append(torch.chunk(out_join, 2, 1))
 
         background_content = torch.randn(1,*self.input_shape)
         self.background_content = pnn.Sigmoid()(background_content)
@@ -250,13 +245,15 @@ class PhysicsNet(BaseNet):
         self.transf_contents = contents
 
         background_mask = torch.ones_like(out_temp_cont[0][0])
+        # print("BG mask", background_mask.shape)
         masks = torch.stack([p[0]-5 for p in out_temp_cont]+[background_mask], dim=1)
-        masks = masks.softmax(dim=-1)
+        # print("masks", masks.shape)
+        masks = pnn.Softmax(dim=1)(masks)
         masks = torch.unbind(masks, dim=1)
         self.transf_masks = masks
 
         out = sum([m*c for m, c in zip(masks, contents)])
-
+        # print("out", out.shape)
         return out
 
     def conv_feedforward(self):
@@ -274,6 +271,10 @@ class PhysicsNet(BaseNet):
         # h_torch = torch.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
         
 
+        # Encode all the input and train frames
+        # sequence length and batch get flattened together in dim0
+        h = tf.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
+        h = torch.randn([10000]+self.input_shape)
         enc_pos, self.enc_masks, self.enc_objs = self.encoder(h)
 
         # decode the input and pred frames

@@ -1,5 +1,6 @@
 from six.moves import xrange
 import tensorflow as tf
+<<<<<<< HEAD
 import torch
 import torch.nn.functional as F
 
@@ -32,23 +33,26 @@ def tf_stn(U, theta, out_size, name='SpatialTransformer', **kwargs):
         identity = identity.flatten()
         theta = tf.Variable(initial_value=identity)
     """
+=======
+import torch.nn.functional as F
+import torch
 
-    def _repeat(x, n_repeats):
-        with tf.compat.v1.variable_scope('_repeat'):
-            rep = tf.transpose(
-                tf.expand_dims(tf.ones([n_repeats, ]), 1), [1, 0])
-            rep = tf.cast(rep, 'int32')
-            x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
-            return tf.reshape(x, [-1])
+def stn(U, theta, out_size):
+    U_pytorch = U#.permute(0, 3, 1, 2).clone().detach()
+>>>>>>> torch
 
-    def _interpolate(im, x, y, out_size):
-        with tf.compat.v1.variable_scope('_interpolate'):
-            # constants
-            num_batch = tf.shape(im)[0]
-            height = tf.shape(im)[1]
-            width = tf.shape(im)[2]
-            channels = tf.shape(im)[3]
+    num_batch = theta.size(0)
+    num_transforms = theta.size(1)
+    num_channels = U.size(1)
+    theta = theta.view(-1, 2, 3)  # Reshape theta to have shape (num_batch*num_transforms, 2, 3)
+    # Adjust the size to match the expected dimensions
+    size = torch.Size((num_batch, num_channels, *out_size))
+    grid = F.affine_grid(theta, size)
+    output = F.grid_sample(U, grid)
 
+    return output #output.permute(0, 2, 3, 1)  # Transpose dimensions to match expected shape
+
+<<<<<<< HEAD
             x = tf.cast(x, 'float32')
             y = tf.cast(y, 'float32')
             height_f = tf.cast(height, 'float32')
@@ -250,3 +254,11 @@ def batch_transformer(U, thetas, out_size):
     input_repeated = U_pytorch.unsqueeze(1).repeat(1, num_transforms, 1, 1, 1)
     input_repeated = input_repeated.view(-1, *U_pytorch.shape[1:])
     return stn(input_repeated, thetas, out_size)
+=======
+def batch_transformer(U, thetas, out_size):
+    U_pytorch = U#.permute(0, 3, 1, 2).clone().detach()
+    num_batch, num_transforms = thetas.shape[:2]
+    input_repeated = U_pytorch.unsqueeze(1).repeat(1, num_transforms, 1, 1, 1)
+    input_repeated = input_repeated.view(-1, *U_pytorch.shape[1:])
+    return stn(input_repeated, thetas, out_size)
+>>>>>>> torch

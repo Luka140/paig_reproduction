@@ -7,6 +7,11 @@ import torchvision.transforms as tvtrans
 
 
 class VelocityEncoder(pnn.Module):
+<<<<<<< HEAD
+=======
+    # TODO test if the functionality of VelocityEncoder block module is the same as the 
+    # original function in physics_models.py
+>>>>>>> torch
     def __init__(self, alt_vel, input_steps, n_objs, coord_units):
         super(VelocityEncoder, self).__init__()
         self.alt_vel = alt_vel
@@ -46,7 +51,10 @@ class VelocityEncoder(pnn.Module):
             h = torch.chunk(h, self.n_objs, dim=0)
             h = torch.cat(h, dim=1)
         return h
+<<<<<<< HEAD
 
+=======
+>>>>>>> torch
 
 class ConvolutionalEncoder(pnn.Module):
     def __init__(self, in_features, hidden_dim, out_features, n_objects):
@@ -97,8 +105,13 @@ class ConvolutionalEncoder(pnn.Module):
         x = self.relu(self.l1(x))
         x = self.relu(self.l2(x))
         x = self.l3(x)
+<<<<<<< HEAD
         x = torch.concat(torch.chunk(x, self.n_objs, 0), dim=1)
         x = self.tanh(x) * (self.input_shape[0] / 2) + (self.input_shape[0] / 2)
+=======
+        x = torch.concat(torch.split(x, x.shape[0]//self.n_objs, 0), dim=1)
+        x = self.tanh(x) * (self.input_shape[1] / 2) + (self.input_shape[1] / 2)
+>>>>>>> torch
         return x, enc_masks, masked_objs
 
 
