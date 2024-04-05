@@ -85,7 +85,6 @@ class ConvolutionalEncoder(pnn.Module):
         # Adds background
         x = torch.concat([x, torch.ones(x.shape[0], 1, x.shape[2], x.shape[3]).to(self.device)], dim=1)
         x = self.softmax(x)
-
         enc_masks = x
         masked_objs = [enc_masks[:, i:i+1, :, :] * inp for i in range(self.n_objs)]
         x = torch.concat(masked_objs, dim=0)
@@ -320,6 +319,18 @@ def variable_from_network(shape):
     var = tf.compat.v1.layers.dense(var, np.prod(shape), activation=None)
     var = tf.reshape(var, shape)
     return var
+
+class VariableFromNetwork(pnn.Module):
+    def __init__(self, shape):
+        super(VariableFromNetwork, self).__init__()
+        self.l1 = pnn.Linear(10, 200)
+        self.l2 = pnn.Linear(200, np.prod(shape))
+        self.shape = shape
+    def forward(self):
+        x = torch.ones([1,10])
+        x = pnn.Tanh()(self.l1(x))
+        x = self.l2(x)
+        return torch.reshape(x, self.shape)
 
 
 if __name__ == "__main__":

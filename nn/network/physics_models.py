@@ -9,8 +9,8 @@ import tensorflow as tf
 import torch
 import torch.nn as pnn
 
-from nn.network.base import BaseNet, OPTIMIZERS, BaseNetTorch
-from nn.network.blocks import UNet, ShallowUNet, variable_from_network, ConvolutionalEncoder, VelocityEncoder
+from nn.network.base import OPTIMIZERS, BaseNetTorch
+from nn.network.blocks import UNet, ShallowUNet, variable_from_network, ConvolutionalEncoder, VelocityEncoder, VariableFromNetwork
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
 from nn.utils.viz import gallery, gif
@@ -97,10 +97,14 @@ class PhysicsNet(BaseNetTorch):
         self.n_objs = self.coord_units//4
 
         # TODO commented out to avoid visualize sequence
-        # self.extra_valid_fns.append((self.visualize_sequence,[],{}))
-        # self.extra_test_fns.append((self.visualize_sequence,[],{}))
+        self.extra_valid_fns.append((self.visualize_sequence,[],{}))
+        self.extra_test_fns.append((self.visualize_sequence,[],{}))
 
         ############
+        tmpl_size = self.conv_input_shape[1]//2
+        self.var_net_content = VariableFromNetwork([self.n_objs, self.conv_ch, tmpl_size, tmpl_size])
+        self.var_net_background = VariableFromNetwork([1,*self.input_shape])
+        self.var_net_template = VariableFromNetwork([self.n_objs, 1, tmpl_size, tmpl_size])
         # self.dtype = torch.float32
         self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs, self.device)
         # TODO check inputs to velocity encoder
@@ -125,14 +129,11 @@ class PhysicsNet(BaseNetTorch):
 
 
         recons_loss = torch.square(recons_target-self.recons_out)
-        #recons_ce_loss = -(recons_target*tf.log(self.recons_out+1e-7) + (1.0-recons_target)*tf.log(1.0-self.recons_out+1e-7))
-
         recons_loss = torch.sum(recons_loss, dim=[2,3,4])
 
         self.recons_loss = torch.mean(recons_loss)
 
         target = self.input[:,self.input_steps:]
-        #ce_loss = -(target*tf.log(self.output+1e-7) + (1.0-target)*tf.log(1.0-self.output+1e-7))
         loss = torch.square(target-self.output)
         loss = torch.sum(loss, dim=[2,3,4])
 
@@ -169,7 +170,6 @@ class PhysicsNet(BaseNetTorch):
         # base_lr = 1e-2
         self.base_lr = base_lr
         self.anneal_lr = anneal_lr
-        # self.lr = tf.Variable(base_lr, trainable=False, name="base_lr")
         self.lr = base_lr
         self.optimizer = OPTIMIZERS[optimizer](self.parameters(), self.lr)
         #self.dyn_optimizer = OPTIMIZERS[optimizer](1e-3)
@@ -206,14 +206,12 @@ class PhysicsNet(BaseNetTorch):
         #TODO i think this is supposed to be the background - whats up with the tile though - why +5?
         
         # TODO maybe swap the channel dim to spot 1 later in the torch.randn calls
-        # template = variable_from_network([self.n_objs, tmpl_size, tmpl_size, 1])
-        template = torch.randn([self.n_objs, 1, tmpl_size, tmpl_size])
+        template = self.var_net_template()
         self.template = template
         template = torch.tile(template, [1,3,1,1])+5
         
         # Non background objects
-        # contents = variable_from_network([self.n_objs, tmpl_size, tmpl_size, self.conv_ch])
-        contents = torch.randn([self.n_objs, self.conv_ch, tmpl_size, tmpl_size])
+        contents = self.var_net_content()
         self.contents = contents 
         contents = pnn.Sigmoid()(contents)
         joint = torch.concat([template, contents], dim=1)
@@ -227,13 +225,10 @@ class PhysicsNet(BaseNetTorch):
             theta4 = torch.tile(torch.tensor([sigma],device=self.device), [inp.shape[0]])
             theta5 = (self.conv_input_shape[1]/2-loc[:,1])/tmpl_size*sigma
             theta = torch.stack([theta0, theta1, theta2, theta3, theta4, theta5], dim=1)
-            # print("conv_ch", self.conv_ch, "loc:", loc.shape, "join", join.shape)
             out_join = stn(torch.tile(join, [inp.shape[0], 1, 1, 1]), theta, self.conv_input_shape[1:])
-            # print("outjoin shape", out_join.shape)
             out_temp_cont.append(torch.split(out_join, out_join.shape[1]//2, 1))
 
-        # background_content = variable_from_network([1]+self.input_shape)
-        background_content = torch.randn(1,*self.input_shape)
+        background_content = self.var_net_background()
         self.background_content = pnn.Sigmoid()(background_content)
         background_content = torch.tile(self.background_content, [batch_size, 1, 1, 1])
         contents = [p[1] for p in out_temp_cont]
@@ -241,9 +236,7 @@ class PhysicsNet(BaseNetTorch):
         self.transf_contents = contents
 
         background_mask = torch.ones_like(out_temp_cont[0][0])
-        # print("BG mask", background_mask.shape)
         masks = torch.stack([p[0]-5 for p in out_temp_cont]+[background_mask], dim=1)
-        # print("masks", masks.shape)
         masks = pnn.Softmax(dim=1)(masks)
         masks = torch.unbind(masks, dim=1)
         self.transf_masks = masks
@@ -262,25 +255,15 @@ class PhysicsNet(BaseNetTorch):
         # states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
         rollout_cell = self.cell(self.coord_units//2, self.coord_units//2)
 
-        # TODO: PLACEHOLDER
-        # batch_size = 1000
-        # self.input = torch.randn(batch_size, 12, 3, 32, 32)
-
         # Encode all the input and train frames
         # sequence length and batch get flattened together in dim0
         h = torch.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
 
-        enc_pos, self.enc_masks, self.enc_objs = self.encoder(h)
+        enc_pos, self.enc_masks, self.masked_objs = self.encoder(h)
 
         # decode the input and pred frames
         recons_out = self.decoder(enc_pos)
-
-        # self.recons_out = tf.reshape(recons_out,
-        #                              [tf.shape(self.input)[0], self.input_steps+self.pred_steps]+self.input_shape)
         self.recons_out = torch.reshape(recons_out, [self.input.shape[0], self.input_steps+self.pred_steps]+self.input_shape)
-        # self.enc_pos = tf.reshape(enc_pos,
-        #                           [tf.shape(self.input)[0], self.input_steps+self.pred_steps, self.coord_units//2])
-
         self.enc_pos = torch.reshape(enc_pos, [self.input.shape[0], self.input_steps+self.pred_steps, self.coord_units//2])
 
         if self.input_steps > 1:
@@ -304,11 +287,6 @@ class PhysicsNet(BaseNetTorch):
             pos_vel_seq.append(torch.cat([pos, vel], dim=1))
             output_seq.append(out)
 
-        # current_scope = tf.compat.v1.get_default_graph().get_name_scope()
-        # self.network_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,
-        #                                       scope=current_scope)
-        # logger.info(self.network_vars)
-
         output_seq = torch.stack(output_seq)
         pos_vel_seq = torch.stack(pos_vel_seq)
         output_seq = torch.permute(output_seq, (1,0,2,3,4))
@@ -316,16 +294,15 @@ class PhysicsNet(BaseNetTorch):
         return output_seq
 
     def visualize_sequence(self):
-        batch_size = 5
-
+        batch_size = self.batch_size
         feed_dict, (batch_x, _) = self.get_batch(batch_size, self.test_iterator)
         fetches = [self.output, self.recons_out]
         if hasattr(self, 'pos_vel_seq'):
             fetches.append(self.pos_vel_seq)
 
         res = fetches
-        output_seq = res[0].detach().numpy()
-        recons_seq = res[1].detach().numpy()
+        output_seq = res[0].detach().cpu().numpy()
+        recons_seq = res[1].detach().cpu().numpy()
         if hasattr(self, 'pos_vel_seq'):
             pos_vel_seq = res[2]
         # print("\n\n\n", batch_x.shape, batch_x[:,:self.input_steps].shape, output_seq.shape)
@@ -341,9 +318,9 @@ class PhysicsNet(BaseNetTorch):
             to_concat = [output_seq[i],batch_x[i],recons_seq[i]]
             total_seq = np.concatenate(to_concat, axis=0) 
 
-            total_seq = total_seq.reshape([total_seq.shape[0], 
-                                           self.input_shape[0], 
-                                           self.input_shape[1], self.conv_ch])
+            total_seq = total_seq.reshape([total_seq.shape[0], *self.input_shape[1:], self.conv_ch])
+                                           # self.input_shape[0],
+                                           # self.input_shape[1], self.conv_ch])
 
             result = gallery(total_seq, ncols=batch_x.shape[1])
 
@@ -356,14 +333,14 @@ class PhysicsNet(BaseNetTorch):
             ax.get_yaxis().set_visible(False)
             fig.tight_layout()
             fig.savefig(os.path.join(self.save_dir, "example%d.jpg"%i))
-
+            plt.close()
         # Make a gif from the sequences
         bordered_output_seq = 0.5*np.ones([batch_size, self.seq_len, 
-                                          self.conv_input_shape[0]+2, self.conv_input_shape[1]+2, 3])
+                                          self.conv_input_shape[1]+2, self.conv_input_shape[2]+2, 3])
         bordered_batch_x = 0.5*np.ones([batch_size, self.seq_len, 
-                                          self.conv_input_shape[0]+2, self.conv_input_shape[1]+2, 3])
-        output_seq = output_seq.reshape([batch_size, self.seq_len]+self.input_shape)
-        batch_x = batch_x.reshape([batch_size, self.seq_len]+self.input_shape)
+                                          self.conv_input_shape[1]+2, self.conv_input_shape[2]+2, 3])
+        output_seq = output_seq.reshape([batch_size, self.seq_len]+self.input_shape[1:] + [self.conv_ch])
+        batch_x = batch_x.reshape([batch_size, self.seq_len]+self.input_shape[1:] + [self.conv_ch])
         bordered_output_seq[:,:,1:-1,1:-1] = output_seq
         bordered_batch_x[:,:,1:-1,1:-1] = batch_x
         output_seq = bordered_output_seq
@@ -376,17 +353,18 @@ class PhysicsNet(BaseNetTorch):
             frames*255, fps=7, scale=3)
 
         # Save extra tensors for visualization
-        fetches = {"contents": self.contents,
-                   "templates": self.template,
-                   "background_content": self.background_content,
-                   "transf_contents": self.transf_contents,
-                   "transf_masks": self.transf_masks,
-                   "enc_masks": self.enc_masks,
-                   "masked_objs": self.masked_objs}
-        results = self.sess.run(fetches, feed_dict=feed_dict)
+        fetches = {"contents": self.contents.cpu(),
+                   "templates": self.template.cpu(),
+                   "background_content": self.background_content.cpu(),
+                   "transf_contents": [cont.cpu() for cont in self.transf_contents],
+                   "transf_masks": [mask.cpu() for mask in self.transf_masks],
+                   "enc_masks": self.enc_masks.cpu(),
+                   "masked_objs": [masked_obj.cpu() for masked_obj in self.masked_objs]}
+        results = fetches
+        # results = self.sess.run(fetches, feed_dict=feed_dict)
         np.savez_compressed(os.path.join(self.save_dir, "extra_outputs.npz"), **results)
-        contents = results["contents"]
-        templates = results["templates"]
+        contents = torch.transpose(results["contents"], 1, -1)
+        templates = torch.transpose(results["templates"], 1, -1)
         contents = 1/(1+np.exp(-contents))
         templates = 1/(1+np.exp(-(templates-5)))
         if self.conv_ch == 1:
