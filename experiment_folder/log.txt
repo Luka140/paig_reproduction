@@ -1,0 +1,16 @@
+2024-04-05 12:18:35,431 - tf - runners/run_physics.py
+--task=spring_color_half
+--model=PhysicsNet
+--epochs=500
+--batch_size=100
+--save_dir=experiment_folder
+--autoencoder_loss=3.0
+--base_lr=3e-4
+--anneal_lr=true
+--color=true
+--eval_every_n_epochs=10
+--print_interval=100
+--debug=false
+--use_ckpt=false
+2024-04-05 12:18:42,181 - tf - valid - epoch=0 eval_extrap_loss=812.6128 eval_pred_loss=3263.9204 eval_recons_loss=816.1492 train_loss=[0.]
+2024-04-05 12:18:44,774 - tf - train - iter=0 train_loss=tensor(3241.2046, grad_fn=<AddBackward0>)

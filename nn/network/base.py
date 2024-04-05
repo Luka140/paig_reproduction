@@ -372,10 +372,10 @@ class BaseNetTorch(torch.nn.Module):
              batch_size,
              type='valid'):
 
-        self.eval_metrics["train_loss"] = 0
-        self.eval_metrics["eval_pred_loss"] = 0
-        self.eval_metrics["eval_extrap_loss"] = 0
-        self.eval_metrics["eval_recons_loss"] = 0
+        self.eval_metrics["train_loss"] = torch.Tensor([0])
+        self.eval_metrics["eval_pred_loss"] = torch.Tensor([0])
+        self.eval_metrics["eval_extrap_loss"] = torch.Tensor([0])
+        self.eval_metrics["eval_recons_loss"] = torch.Tensor([0])
         eval_metrics_results = {k: [] for k in self.eval_metrics.keys()}
         eval_outputs = {"input": [], "output": []}
 
@@ -400,19 +400,22 @@ class BaseNetTorch(torch.nn.Module):
             self.eval_metrics["eval_extrap_loss"] = self.eval_losses[1]
             self.eval_metrics["eval_recons_loss"] = self.eval_losses[2]
             self.loss = self.train_loss
+            # print("\n\n\n\n", self.)
 
             for k in self.eval_metrics.keys():
                 eval_metrics_results[k].append(self.eval_metrics[k])
             eval_outputs["input"].append(feed_dict["input"])
-            eval_outputs["output"].append(self.eval_losses)
+            eval_outputs["output"].append(self.eval_losses[0])
+            # print("\n\n\n\n\neval_outputs:", eval_outputs["output"])
 
+        [print(output.detach().numpy()) for output in eval_outputs["output"]]
+        # np.concatenate([output.detach().numpy() for output in eval_outputs["output"]])
 
         eval_metrics_results = {k: np.mean([i.detach().numpy() for i in v], axis=0) for k, v in
                                 eval_metrics_results.items()}
         np.savez_compressed(os.path.join(self.save_dir, "outputs.npz"),
                             input=np.concatenate(eval_outputs["input"], axis=0),
-                            output=np.concatenate([output.detach().numpy() for output in eval_outputs["output"]],
-                                                  axis=0))
+                            output=np.array([output.detach().numpy() for output in eval_outputs["output"]]))
 
         self.run_extra_fns(type)
 
