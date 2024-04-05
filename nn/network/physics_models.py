@@ -9,7 +9,7 @@ import tensorflow as tf
 import torch
 import torch.nn as pnn
 
-from nn.network.base import BaseNet, OPTIMIZERS
+from nn.network.base import BaseNet, OPTIMIZERS, BaseNetTorch
 from nn.network.blocks import UNet, ShallowUNet, variable_from_network, ConvolutionalEncoder, VelocityEncoder
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
@@ -37,7 +37,8 @@ COORD_UNITS = {
     "mnist_spring_color": 8
 }
 
-class PhysicsNet(BaseNet):
+
+class PhysicsNet(BaseNetTorch):
     def __init__(self,
                  task="",
                  recurrent_units=128,
@@ -94,8 +95,9 @@ class PhysicsNet(BaseNet):
         self.coord_units = COORD_UNITS[self.task]
         self.n_objs = self.coord_units//4
 
-        self.extra_valid_fns.append((self.visualize_sequence,[],{}))
-        self.extra_test_fns.append((self.visualize_sequence,[],{}))
+        # TODO commented out to avoid visualize sequence
+        # self.extra_valid_fns.append((self.visualize_sequence,[],{}))
+        # self.extra_test_fns.append((self.visualize_sequence,[],{}))
 
         ############
 
@@ -109,7 +111,7 @@ class PhysicsNet(BaseNet):
     def get_batch(self, batch_size, iterator):
         batch_x, _ = iterator.next_batch(batch_size)
         batch_len = batch_x.shape[1]
-        feed_dict = {self.input: batch_x}
+        feed_dict = {"input": batch_x}
         return feed_dict, (batch_x, None)
 
     def compute_loss(self):
@@ -144,21 +146,21 @@ class PhysicsNet(BaseNet):
         eval_losses = [self.pred_loss, self.extrap_loss, self.recons_loss]
         return train_loss, eval_losses
 
-    def build_graph(self):
-        tf.compat.v1.disable_eager_execution()
-        # self.input = tf.compat.v1.placeholder(tf.float32, shape=[None, self.seq_len]+self.input_shape)
-        # TODO Placeholder ====================================================================================
-        batch_size = 100
-        self.input = torch.randn(batch_size, self.seq_len, *self.input_shape)
-        # TODO Placeholder ====================================================================================
-        self.output = self.conv_feedforward()
-
-        self.train_loss, self.eval_losses = self.compute_loss()
-        self.train_metrics["train_loss"] = self.train_loss
-        self.eval_metrics["eval_pred_loss"] = self.eval_losses[0]
-        self.eval_metrics["eval_extrap_loss"] = self.eval_losses[1]
-        self.eval_metrics["eval_recons_loss"] = self.eval_losses[2]
-        self.loss = self.train_loss
+    # def build_graph(self):
+    #     tf.compat.v1.disable_eager_execution()
+    #     # self.input = tf.compat.v1.placeholder(tf.float32, shape=[None, self.seq_len]+self.input_shape)
+    #     # TODO Placeholder ====================================================================================
+    #     batch_size = 100
+    #     self.input = torch.randn(batch_size, self.seq_len, *self.input_shape)
+    #     # TODO Placeholder ====================================================================================
+    #     self.output = self.conv_feedforward(self.input)
+    #
+    #     self.train_loss, self.eval_losses = self.compute_loss()
+    #     self.train_metrics["train_loss"] = self.train_loss
+    #     self.eval_metrics["eval_pred_loss"] = self.eval_losses[0]
+    #     self.eval_metrics["eval_extrap_loss"] = self.eval_losses[1]
+    #     self.eval_metrics["eval_recons_loss"] = self.eval_losses[2]
+    #     self.loss = self.train_loss
 
     def build_optimizer(self, base_lr, optimizer="rmsprop", anneal_lr=True):
         # Uncomment lines below to have different learning rates for physics and vision components
@@ -173,8 +175,11 @@ class PhysicsNet(BaseNet):
 
 
         # print(list(self.parameters()))
-        self.loss.backward()
-        gvs = self.optimizer.step()
+
+        # TODO commented out, dont think this should be here
+        # self.loss.backward()
+        # gvs = self.optimizer.step()
+
 
         # gvs = self.optimizer.compute_gradients(self.loss, var_list=tf.compat.v1.trainable_variables())
         # gvs = [(tf.clip_by_value(grad, -1.0, 1.0), var) for grad, var in gvs if grad is not None]
@@ -246,11 +251,14 @@ class PhysicsNet(BaseNet):
         # print("out", out.shape)
         return out
 
-    def conv_feedforward(self):
+    def forward(self, input):
+        return self.conv_feedforward(input)
 
+    def conv_feedforward(self, inp):
+        self.input = inp
         # TODO: what do the lines below do? - this is still tensorflow code but somehow doesnt throw an error
-        lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
-        states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
+        # lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
+        # states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
         rollout_cell = self.cell(self.coord_units//2, self.coord_units//2)
 
         # TODO: PLACEHOLDER
@@ -260,8 +268,7 @@ class PhysicsNet(BaseNet):
         # Encode all the input and train frames
         # sequence length and batch get flattened together in dim0
         h = torch.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
-        # TODO placeholder atm
-        # h = torch.randn([batch_]+self.input_shape)
+
         enc_pos, self.enc_masks, self.enc_objs = self.encoder(h)
 
         # decode the input and pred frames

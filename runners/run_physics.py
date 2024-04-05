@@ -70,7 +70,7 @@ if __name__ == "__main__":
                                   "../data/datasets/%s"%data_file), conv=True, datapoints=FLAGS.datapoints)
         network.get_data(data_iterators)
 
-        network.build_graph()
+        # network.build_graph()
         # print(list(network.parameters()))
         network.build_optimizer(FLAGS.base_lr, FLAGS.optimizer, FLAGS.anneal_lr)
         network.initialize_graph(FLAGS.save_dir, FLAGS.use_ckpt, FLAGS.ckpt_dir)
@@ -78,14 +78,14 @@ if __name__ == "__main__":
         network.train(FLAGS.epochs, FLAGS.batch_size, FLAGS.save_every_n_epochs, FLAGS.eval_every_n_epochs,
                     FLAGS.print_interval, FLAGS.debug)
         
-        tf.compat.v1.reset_default_graph()
+        # tf.compat.v1.reset_default_graph()
     
     network = Model(FLAGS.task, FLAGS.recurrent_units, FLAGS.lstm_layers, cell_type, 
                     test_seq_len, input_steps, pred_steps,
                    FLAGS.autoencoder_loss, FLAGS.alt_vel, FLAGS.color, 
                    input_size, FLAGS.encoder_type, FLAGS.decoder_type)
 
-    network.build_graph()
+    # network.build_graph()
     network.build_optimizer(FLAGS.base_lr, FLAGS.optimizer, FLAGS.anneal_lr)
     network.initialize_graph(FLAGS.save_dir, True, FLAGS.ckpt_dir)
 
