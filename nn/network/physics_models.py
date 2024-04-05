@@ -52,10 +52,11 @@ class PhysicsNet(BaseNetTorch):
                  color=False,
                  input_size=36*36,
                  encoder_type="conv_encoder",
-                 decoder_type="conv_st_decoder"):
+                 decoder_type="conv_st_decoder",
+                 device=torch.device("cpu")):
 
         super(PhysicsNet, self).__init__()
-
+        self.device = device
         assert task in COORD_UNITS
         self.task = task
 
@@ -100,10 +101,10 @@ class PhysicsNet(BaseNetTorch):
         # self.extra_test_fns.append((self.visualize_sequence,[],{}))
 
         ############
-
-        self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs)
+        # self.dtype = torch.float32
+        self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs, self.device)
         # TODO check inputs to velocity encoder
-        self.velocity_encoder = VelocityEncoder(self.alt_vel, self.input_steps, self.n_objs, self.coord_units)
+        self.velocity_encoder = VelocityEncoder(self.alt_vel, self.input_steps, self.n_objs, self.coord_units, self.device)
         
         # for decoder 
         self.log_sig = 1.0
@@ -219,11 +220,11 @@ class PhysicsNet(BaseNetTorch):
 
         out_temp_cont = []
         for loc, join in zip(torch.split(inp, inp.shape[1]//self.n_objs, -1), torch.split(joint, joint.shape[0]//self.n_objs, 0)):
-            theta0 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
-            theta1 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
+            theta0 = torch.tile(torch.tensor([sigma],device=self.device), [inp.shape[0]])
+            theta1 = torch.tile(torch.tensor([0.0],device=self.device), [inp.shape[0]])
             theta2 = (self.conv_input_shape[1]/2-loc[:,0])/tmpl_size*sigma
-            theta3 = torch.tile(torch.Tensor([0.0]), [inp.shape[0]])
-            theta4 = torch.tile(torch.Tensor([sigma]), [inp.shape[0]])
+            theta3 = torch.tile(torch.tensor([0.0],device=self.device), [inp.shape[0]])
+            theta4 = torch.tile(torch.tensor([sigma],device=self.device), [inp.shape[0]])
             theta5 = (self.conv_input_shape[1]/2-loc[:,1])/tmpl_size*sigma
             theta = torch.stack([theta0, theta1, theta2, theta3, theta4, theta5], dim=1)
             # print("conv_ch", self.conv_ch, "loc:", loc.shape, "join", join.shape)

@@ -9,12 +9,13 @@ import torchvision.transforms as tvtrans
 class VelocityEncoder(pnn.Module):
     # TODO test if the functionality of VelocityEncoder block module is the same as the 
     # original function in physics_models.py
-    def __init__(self, alt_vel, input_steps, n_objs, coord_units):
+    def __init__(self, alt_vel, input_steps, n_objs, coord_units, device):
         super(VelocityEncoder, self).__init__()
         self.alt_vel = alt_vel
         self.input_steps = input_steps
         self.n_objs = n_objs
         self.coord_units = coord_units
+        self.device = device
 
         if self.alt_vel:
             # Linear combination of differences between previous time-steps
@@ -50,12 +51,13 @@ class VelocityEncoder(pnn.Module):
         return h
 
 class ConvolutionalEncoder(pnn.Module):
-    def __init__(self, in_features, hidden_dim, out_features, n_objects):
+    def __init__(self, in_features, hidden_dim, out_features, n_objects, device):
         """
         :param in_features: input shape [channels, height, width]
 
         """
         super().__init__()
+        self.device = device
         self.input_shape = in_features
         self.conv_ch = in_features[0]
         self.n_objs = n_objects
@@ -81,7 +83,7 @@ class ConvolutionalEncoder(pnn.Module):
             x = self.unet(x)
 
         # Adds background
-        x = torch.concat([x, torch.ones(x.shape[0], 1, x.shape[2], x.shape[3])], dim=1)
+        x = torch.concat([x, torch.ones(x.shape[0], 1, x.shape[2], x.shape[3]).to(self.device)], dim=1)
         x = self.softmax(x)
 
         enc_masks = x

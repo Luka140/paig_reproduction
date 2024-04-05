@@ -338,8 +338,10 @@ class BaseNetTorch(torch.nn.Module):
                 feed_dict, _ = self.get_batch(batch_size, self.train_iterator)
                 # results, _ = self.sess.run(
                 # [self.train_metrics, self.train_op], feed_dict=feed_dict)
-
-                result_sequence = self.forward(torch.tensor(feed_dict["input"], requires_grad=True, dtype=torch.double))
+                # torch.inference_mode(False)
+                inp = torch.tensor(feed_dict["input"], requires_grad=True, device=self.device)
+                result_sequence = self.forward(inp)
+                self.optimizer.zero_grad(set_to_none=True)
                 self.train_loss, self.eval_losses = self.compute_loss()
 
                 self.train_metrics["train_loss"] = self.train_loss
@@ -347,12 +349,13 @@ class BaseNetTorch(torch.nn.Module):
                 self.eval_metrics["eval_extrap_loss"] = self.eval_losses[1]
                 self.eval_metrics["eval_recons_loss"] = self.eval_losses[2]
                 self.loss = self.train_loss
+
                 self.loss.backward()
                 self.optimizer.step()
 
                 self.run_extra_fns("train") # DUnno what this does
 
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)
 
                 if step % print_interval == 0:
                     log_metrics(logger, "train - iter=%s" % step, self.train_metrics)
@@ -372,51 +375,51 @@ class BaseNetTorch(torch.nn.Module):
              batch_size,
              type='valid'):
 
-        self.eval_metrics["train_loss"] = torch.Tensor([0])
-        self.eval_metrics["eval_pred_loss"] = torch.Tensor([0])
-        self.eval_metrics["eval_extrap_loss"] = torch.Tensor([0])
-        self.eval_metrics["eval_recons_loss"] = torch.Tensor([0])
-        eval_metrics_results = {k: [] for k in self.eval_metrics.keys()}
-        eval_outputs = {"input": [], "output": []}
+        # torch.inference_mode(True)
+        with torch.no_grad():
+            self.eval_metrics["train_loss"] = torch.Tensor([0])
+            self.eval_metrics["eval_pred_loss"] = torch.Tensor([0])
+            self.eval_metrics["eval_extrap_loss"] = torch.Tensor([0])
+            self.eval_metrics["eval_recons_loss"] = torch.Tensor([0])
+            eval_metrics_results = {k: [] for k in self.eval_metrics.keys()}
+            eval_outputs = {"input": [], "output": []}
 
-        eval_iterator = self.get_iterator(type)
-        eval_iterator.reset_epoch()
+            eval_iterator = self.get_iterator(type)
+            eval_iterator.reset_epoch()
 
-        while eval_iterator.get_epoch() < 1:
-            if eval_iterator.X.shape[0] < 100:
-                batch_size = eval_iterator.X.shape[0]
-            feed_dict, _ = self.get_batch(batch_size, eval_iterator)
-            # fetches = {k: v for k, v in self.eval_metrics.items()}
-            # fetches["output"] = self.output
-            # fetches["input"] = self.input
-            # TODO misschien is dit wel nodig? wie weet
-            # results = self.sess.run(fetches, feed_dict=feed_dict)
-            inp = torch.DoubleTensor(feed_dict["input"])
-            print("\n\n\n\n", inp.shape)
-            self.output = self.conv_feedforward(inp)
-            self.train_loss, self.eval_losses = self.compute_loss()
-            self.train_metrics["train_loss"] = self.train_loss
-            self.eval_metrics["eval_pred_loss"] = self.eval_losses[0]
-            self.eval_metrics["eval_extrap_loss"] = self.eval_losses[1]
-            self.eval_metrics["eval_recons_loss"] = self.eval_losses[2]
-            self.loss = self.train_loss
-            # print("\n\n\n\n", self.)
+            while eval_iterator.get_epoch() < 1:
+                if eval_iterator.X.shape[0] < 100:
+                    batch_size = eval_iterator.X.shape[0]
+                feed_dict, _ = self.get_batch(batch_size, eval_iterator)
+                # fetches = {k: v for k, v in self.eval_metrics.items()}
+                # fetches["output"] = self.output
+                # fetches["input"] = self.input
+                # TODO misschien is dit wel nodig? wie weet
+                # results = self.sess.run(fetches, feed_dict=feed_dict)
+                inp = torch.tensor(feed_dict["input"], requires_grad=False).to(self.device)
+                self.output = self.conv_feedforward(inp)
+                self.train_loss, self.eval_losses = self.compute_loss()
+                self.train_metrics["train_loss"] = self.train_loss
+                self.eval_metrics["eval_pred_loss"] = self.eval_losses[0]
+                self.eval_metrics["eval_extrap_loss"] = self.eval_losses[1]
+                self.eval_metrics["eval_recons_loss"] = self.eval_losses[2]
+                self.loss = self.train_loss
+                # print("\n\n\n\n", self.)
 
-            for k in self.eval_metrics.keys():
-                eval_metrics_results[k].append(self.eval_metrics[k])
-            eval_outputs["input"].append(feed_dict["input"])
-            eval_outputs["output"].append(self.eval_losses[0])
-            # print("\n\n\n\n\neval_outputs:", eval_outputs["output"])
+                for k in self.eval_metrics.keys():
+                    eval_metrics_results[k].append(self.eval_metrics[k])
+                eval_outputs["input"].append(feed_dict["input"])
+                eval_outputs["output"].append(self.eval_losses[0])
+                # print("\n\n\n\n\neval_outputs:", eval_outputs["output"])
 
-        [print(output.detach().numpy()) for output in eval_outputs["output"]]
-        # np.concatenate([output.detach().numpy() for output in eval_outputs["output"]])
+            # np.concatenate([output.detach().numpy() for output in eval_outputs["output"]])
 
-        eval_metrics_results = {k: np.mean([i.detach().numpy() for i in v], axis=0) for k, v in
-                                eval_metrics_results.items()}
-        np.savez_compressed(os.path.join(self.save_dir, "outputs.npz"),
-                            input=np.concatenate(eval_outputs["input"], axis=0),
-                            output=np.array([output.detach().numpy() for output in eval_outputs["output"]]))
+            eval_metrics_results = {k: np.mean([i.detach().cpu().numpy() for i in v], axis=0) for k, v in
+                                    eval_metrics_results.items()}
+            np.savez_compressed(os.path.join(self.save_dir, "outputs.npz"),
+                                input=np.concatenate(eval_outputs["input"], axis=0),
+                                output=np.array([output.detach().cpu().numpy() for output in eval_outputs["output"]]))
 
-        self.run_extra_fns(type)
+            self.run_extra_fns(type)
 
-        return eval_metrics_results
+            return eval_metrics_results

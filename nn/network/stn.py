@@ -4,7 +4,6 @@ import torch.nn.functional as F
 import torch
 
 def stn(U, theta, out_size):
-    U_pytorch = U#.permute(0, 3, 1, 2).clone().detach()
 
     num_batch = theta.size(0)
     num_transforms = theta.size(1)
@@ -13,7 +12,7 @@ def stn(U, theta, out_size):
     # Adjust the size to match the expected dimensions
     size = torch.Size((num_batch, num_channels, *out_size))
     grid = F.affine_grid(theta, size)
-    output = F.grid_sample(U, grid)
+    output = F.grid_sample(U.float(), grid.float())
 
     return output #output.permute(0, 2, 3, 1)  # Transpose dimensions to match expected shape
 

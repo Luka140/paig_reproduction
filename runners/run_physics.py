@@ -1,6 +1,7 @@
 import os
 import logging
 import inspect
+import torch
 from importlib.metadata import version
 import tensorflow as tf
 if int(version("tensorflow")[2:4]) >= 16:
@@ -59,17 +60,23 @@ data_file, test_data_file, cell_type, seq_len, test_seq_len, input_steps, pred_s
 
 if __name__ == "__main__":
     if not FLAGS.test_mode:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        # device = torch.device("cpu")
+        torch.set_default_device(device)
         network = Model(FLAGS.task, FLAGS.recurrent_units, FLAGS.lstm_layers, cell_type, 
                         seq_len, input_steps, pred_steps,
                        FLAGS.autoencoder_loss, FLAGS.alt_vel, FLAGS.color, 
-                       input_size, FLAGS.encoder_type, FLAGS.decoder_type)
+                       input_size, FLAGS.encoder_type, FLAGS.decoder_type, device=device)
 
         data_iterators = get_iterators(
                               os.path.join(
                                   os.path.dirname(os.path.realpath(__file__)), 
                                   "../data/datasets/%s"%data_file), conv=True, datapoints=FLAGS.datapoints)
-        network.get_data(data_iterators)
 
+
+        network.to(network.device)
+        network.get_data(data_iterators)
+        # network = network.float()
         # network.build_graph()
         # print(list(network.parameters()))
         network.build_optimizer(FLAGS.base_lr, FLAGS.optimizer, FLAGS.anneal_lr)
