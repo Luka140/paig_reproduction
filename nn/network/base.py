@@ -339,7 +339,7 @@ class BaseNetTorch(torch.nn.Module):
                 # results, _ = self.sess.run(
                 # [self.train_metrics, self.train_op], feed_dict=feed_dict)
 
-                result_sequence = self.forward(torch.Tensor(feed_dict["input"]))
+                result_sequence = self.forward(torch.tensor(feed_dict["input"], requires_grad=True, dtype=torch.double))
                 self.train_loss, self.eval_losses = self.compute_loss()
 
                 self.train_metrics["train_loss"] = self.train_loss
@@ -391,7 +391,7 @@ class BaseNetTorch(torch.nn.Module):
             # fetches["input"] = self.input
             # TODO misschien is dit wel nodig? wie weet
             # results = self.sess.run(fetches, feed_dict=feed_dict)
-            inp = torch.Tensor(feed_dict["input"])
+            inp = torch.DoubleTensor(feed_dict["input"])
             print("\n\n\n\n", inp.shape)
             self.output = self.conv_feedforward(inp)
             self.train_loss, self.eval_losses = self.compute_loss()
