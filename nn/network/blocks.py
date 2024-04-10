@@ -1,5 +1,4 @@
 import numpy as np
-import tensorflow as tf
 import torch
 import torch.nn as pnn
 import torchvision.transforms as tvtrans
@@ -7,12 +6,15 @@ import torchvision.transforms as tvtrans
 
 
 class VelocityEncoder(pnn.Module):
-    def __init__(self, alt_vel, input_steps, n_objs, coord_units):
+    # TODO test if the functionality of VelocityEncoder block module is the same as the 
+    # original function in physics_models.py
+    def __init__(self, alt_vel, input_steps, n_objs, coord_units, device):
         super(VelocityEncoder, self).__init__()
         self.alt_vel = alt_vel
         self.input_steps = input_steps
         self.n_objs = n_objs
         self.coord_units = coord_units
+        self.device = device
 
         if self.alt_vel:
             # Linear combination of differences between previous time-steps
@@ -48,12 +50,13 @@ class VelocityEncoder(pnn.Module):
         return h
 
 class ConvolutionalEncoder(pnn.Module):
-    def __init__(self, in_features, hidden_dim, out_features, n_objects):
+    def __init__(self, in_features, hidden_dim, out_features, n_objects, device):
         """
         :param in_features: input shape [channels, height, width]
 
         """
         super().__init__()
+        self.device = device
         self.input_shape = in_features
         self.conv_ch = in_features[0]
         self.n_objs = n_objects
@@ -79,9 +82,8 @@ class ConvolutionalEncoder(pnn.Module):
             x = self.unet(x)
 
         # Adds background
-        x = torch.concat([x, torch.ones(x.shape[0], 1, x.shape[2], x.shape[3])], dim=1)
+        x = torch.concat([x, torch.ones(x.shape[0], 1, x.shape[2], x.shape[3]).to(self.device)], dim=1)
         x = self.softmax(x)
-
         enc_masks = x
         masked_objs = [enc_masks[:, i:i+1, :, :] * inp for i in range(self.n_objs)]
         x = torch.concat(masked_objs, dim=0)
@@ -308,14 +310,18 @@ class ShallowUNet(pnn.Module):
         return x
 
 
-def variable_from_network(shape):
-    # Produces a variable from a vector of 1's. 
-    # Improves learning speed of contents and masks.
-    var = tf.ones([1,10])
-    var = tf.compat.v1.layers.dense(var, 200, activation=tf.tanh)
-    var = tf.compat.v1.layers.dense(var, np.prod(shape), activation=None)
-    var = tf.reshape(var, shape)
-    return var
+class VariableFromNetwork(pnn.Module):
+    def __init__(self, shape):
+        super(VariableFromNetwork, self).__init__()
+        self.l1 = pnn.Linear(10, 200)
+        self.l2 = pnn.Linear(200, np.prod(shape))
+        self.shape = shape
+
+    def forward(self):
+        x = torch.ones([1,10])
+        x = pnn.Tanh()(self.l1(x))
+        x = self.l2(x)
+        return torch.reshape(x, self.shape)
 
 
 if __name__ == "__main__":
@@ -323,8 +329,7 @@ if __name__ == "__main__":
     # conv_input_shape = [3, 32, 32]
     conv_input_shape = [3, 40, 40]
 
-    enc = ConvolutionalEncoder(conv_input_shape, 200, 2, n_objs)
+    enc = ConvolutionalEncoder(conv_input_shape, 200, 2, n_objs, torch.device("cpu"))
     h = torch.Tensor(1000, *conv_input_shape)
 
     x, _, __ = enc(h)
-    print(x.shape)
