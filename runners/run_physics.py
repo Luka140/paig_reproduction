@@ -61,12 +61,14 @@ data_file, test_data_file, cell_type, seq_len, test_seq_len, input_steps, pred_s
 if __name__ == "__main__":
     if not FLAGS.test_mode:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        # device = torch.device("cpu")
+        # device = torch.device("cpu") # TODO temp disable GPU
         torch.set_default_device(device)
         network = Model(FLAGS.task, FLAGS.recurrent_units, FLAGS.lstm_layers, cell_type, 
                         seq_len, input_steps, pred_steps,
                        FLAGS.autoencoder_loss, FLAGS.alt_vel, FLAGS.color, 
                        input_size, FLAGS.encoder_type, FLAGS.decoder_type, device=device)
+
+        # [print(module) for module in network.modules()]
 
         data_iterators = get_iterators(
                               os.path.join(
@@ -82,7 +84,7 @@ if __name__ == "__main__":
         network.build_optimizer(FLAGS.base_lr, FLAGS.optimizer, FLAGS.anneal_lr)
         network.initialize_graph(FLAGS.save_dir, FLAGS.use_ckpt, FLAGS.ckpt_dir)
 
-        network.train(FLAGS.epochs, FLAGS.batch_size, FLAGS.save_every_n_epochs, FLAGS.eval_every_n_epochs,
+        network.train_model(FLAGS.epochs, FLAGS.batch_size, FLAGS.save_every_n_epochs, FLAGS.eval_every_n_epochs,
                     FLAGS.print_interval, FLAGS.debug)
         
         # tf.compat.v1.reset_default_graph()

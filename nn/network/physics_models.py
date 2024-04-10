@@ -5,12 +5,11 @@ import os
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
-import tensorflow as tf
 import torch
 import torch.nn as pnn
 
 from nn.network.base import OPTIMIZERS, BaseNetTorch
-from nn.network.blocks import UNet, ShallowUNet, variable_from_network, ConvolutionalEncoder, VelocityEncoder, VariableFromNetwork
+from nn.network.blocks import ConvolutionalEncoder, VelocityEncoder, VariableFromNetwork
 from nn.network.cells import bouncing_ode_cell, spring_ode_cell, gravity_ode_cell
 from nn.network.stn import stn
 from nn.utils.viz import gallery, gif
@@ -51,7 +50,7 @@ class PhysicsNet(BaseNetTorch):
                  alt_vel=False,
                  color=False,
                  input_size=36*36,
-                 encoder_type="conv_encoder",
+                 encoder_type="",
                  decoder_type="conv_st_decoder",
                  device=torch.device("cpu")):
 
@@ -107,11 +106,18 @@ class PhysicsNet(BaseNetTorch):
         self.var_net_template = VariableFromNetwork([self.n_objs, 1, tmpl_size, tmpl_size])
         # self.dtype = torch.float32
         self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs, self.device)
-        # TODO check inputs to velocity encoder
         self.velocity_encoder = VelocityEncoder(self.alt_vel, self.input_steps, self.n_objs, self.coord_units, self.device)
-        
+
+        test_inp_dim = 4
+        self.test_network = pnn.Sequential(pnn.Linear(test_inp_dim, 200), pnn.ReLU(), pnn.Linear(200,200), pnn.ReLU(), pnn.Linear(200, 3*32*32), pnn.Sigmoid())
+
+        lstm_hidden_dim = 100
+        # self.lstm = pnn.LSTM((self.input_steps+self.pred_steps)*self.conv_ch * self.input_shape[1]**2, lstm_hidden_dim, batch_first=True, num_layers=self.lstm_layers, dropout=0.05)
+        # self.lstm_linear = pnn.Linear(lstm_hidden_dim, np.prod(self.input_shape))
+        # lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
+
         # for decoder 
-        self.log_sig = 1.0
+        self.log_sig = 1.
 
     def get_batch(self, batch_size, iterator):
         batch_x, _ = iterator.next_batch(batch_size)
@@ -175,13 +181,6 @@ class PhysicsNet(BaseNetTorch):
         #self.dyn_optimizer = OPTIMIZERS[optimizer](1e-3)
 
 
-        # print(list(self.parameters()))
-
-        # TODO commented out, dont think this should be here
-        # self.loss.backward()
-        # gvs = self.optimizer.step()
-
-
         # gvs = self.optimizer.compute_gradients(self.loss, var_list=tf.compat.v1.trainable_variables())
         # gvs = [(tf.clip_by_value(grad, -1.0, 1.0), var) for grad, var in gvs if grad is not None]
         # self.train_op = self.optimizer.apply_gradients(gvs)
@@ -205,7 +204,6 @@ class PhysicsNet(BaseNetTorch):
         
         #TODO i think this is supposed to be the background - whats up with the tile though - why +5?
         
-        # TODO maybe swap the channel dim to spot 1 later in the torch.randn calls
         template = self.var_net_template()
         self.template = template
         template = torch.tile(template, [1,3,1,1])+5
@@ -242,7 +240,6 @@ class PhysicsNet(BaseNetTorch):
         self.transf_masks = masks
 
         out = sum([m*c for m, c in zip(masks, contents)])
-        # print("out", out.shape)
         return out
 
     def forward(self, input):
@@ -250,19 +247,28 @@ class PhysicsNet(BaseNetTorch):
 
     def conv_feedforward(self, inp):
         self.input = inp
-        # TODO: what do the lines below do? - this is still tensorflow code but somehow doesnt throw an error
         # lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
         # states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
         rollout_cell = self.cell(self.coord_units//2, self.coord_units//2)
 
+        h = self.input[:,:self.input_steps+self.pred_steps].reshape(self.input.shape[0],self.input_steps+self.pred_steps,-1)
+        # print(h.shape)
+        # h, _ = self.lstm(h)
+        # print(h.shape)
+        # h = self.lstm_linear(h)
+        # print(h.shape)
         # Encode all the input and train frames
         # sequence length and batch get flattened together in dim0
-        h = torch.reshape(self.input[:,:self.input_steps+self.pred_steps], [-1]+self.input_shape)
+        h = torch.reshape(h, [-1]+self.input_shape)
 
         enc_pos, self.enc_masks, self.masked_objs = self.encoder(h)
 
         # decode the input and pred frames
         recons_out = self.decoder(enc_pos)
+        # print(enc_pos.shape, recons_out.shape)
+        # recons_out = self.test_network(enc_pos)
+        # recons_out = torch.reshape(recons_out, (-1, self.input_size))
+
         self.recons_out = torch.reshape(recons_out, [self.input.shape[0], self.input_steps+self.pred_steps]+self.input_shape)
         self.enc_pos = torch.reshape(enc_pos, [self.input.shape[0], self.input_steps+self.pred_steps, self.coord_units//2])
 
@@ -305,15 +311,14 @@ class PhysicsNet(BaseNetTorch):
         recons_seq = res[1].detach().cpu().numpy()
         if hasattr(self, 'pos_vel_seq'):
             pos_vel_seq = res[2]
-        # print("\n\n\n", batch_x.shape, batch_x[:,:self.input_steps].shape, output_seq.shape)
         output_seq = np.concatenate([batch_x[:,:self.input_steps], output_seq], axis=1)
         recons_seq = np.concatenate([recons_seq, np.zeros((batch_size, self.extrap_steps)+recons_seq.shape[2:])], axis=1)
 
         # Plot a grid with prediction sequences
         for i in range(batch_x.shape[0]):
-            #if hasattr(self, 'pos_vel_seq'):
-            #    if i == 0 or i == 1:
-            #        logger.info(pos_vel_seq[i])
+            if hasattr(self, 'pos_vel_seq'):
+               if i == 0 or i == 1:
+                   logger.info(pos_vel_seq[i])
 
             to_concat = [output_seq[i],batch_x[i],recons_seq[i]]
             total_seq = np.concatenate(to_concat, axis=0) 
@@ -378,6 +383,6 @@ class PhysicsNet(BaseNetTorch):
         ax.get_yaxis().set_visible(False)
         fig.tight_layout()
         fig.savefig(os.path.join(self.save_dir, "templates.jpg"))
-
-        logger.info([(v.name, self.sess.run(v)) for v in tf.compat.v1.trainable_variables() if "ode_cell" in v.name or "sigma" in v.name])
+        plt.close("all")
+        # logger.info([(v.name, self.sess.run(v)) for v in tf.compat.v1.trainable_variables() if "ode_cell" in v.name or "sigma" in v.name])
 
