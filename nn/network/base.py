@@ -144,6 +144,7 @@ class BaseNetTorch(torch.nn.Module):
                 # results, _ = self.sess.run(
                 # [self.train_metrics, self.train_op], feed_dict=feed_dict)
                 # torch.inference_mode(False)
+
                 inp = torch.tensor(feed_dict["input"], requires_grad=True, device=self.device)
                 result_sequence = self.forward(inp)
                 # self.optimizer.zero_grad(set_to_none=True)
@@ -186,9 +187,9 @@ class BaseNetTorch(torch.nn.Module):
         # torch.inference_mode(True)
         with torch.no_grad():
             # self.eval_metrics["train_loss"] = torch.Tensor([0])
-            self.eval_metrics["eval_pred_loss"] = torch.Tensor([0])
-            self.eval_metrics["eval_extrap_loss"] = torch.Tensor([0])
-            self.eval_metrics["eval_recons_loss"] = torch.Tensor([0])
+            self.eval_metrics["eval_pred_loss"] = torch.tensor([0], device=self.device)
+            self.eval_metrics["eval_extrap_loss"] = torch.tensor([0], device=self.device)
+            self.eval_metrics["eval_recons_loss"] = torch.tensor([0], device=self.device)
             eval_metrics_results = {k: [] for k in self.eval_metrics.keys()}
             eval_outputs = {"input": [], "output": []}
 
@@ -202,7 +203,8 @@ class BaseNetTorch(torch.nn.Module):
                 # fetches = {k: v for k, v in self.eval_metrics.items()}
                 # fetches["output"] = self.output
                 # fetches["input"] = self.input
-                inp = torch.tensor(feed_dict["input"], requires_grad=False).to(self.device)
+                # TODO Device mismatch error at this point
+                inp = torch.tensor(feed_dict["input"], requires_grad=False, device=self.device)
                 self.output = self.conv_feedforward(inp)
                 self.train_loss, self.eval_losses = self.compute_loss()
                 self.train_metrics["train_loss"] = self.train_loss
