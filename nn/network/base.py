@@ -202,8 +202,6 @@ class BaseNetTorch(torch.nn.Module):
                 # fetches = {k: v for k, v in self.eval_metrics.items()}
                 # fetches["output"] = self.output
                 # fetches["input"] = self.input
-                # TODO misschien is dit wel nodig? wie weet
-                # results = self.sess.run(fetches, feed_dict=feed_dict)
                 inp = torch.tensor(feed_dict["input"], requires_grad=False).to(self.device)
                 self.output = self.conv_feedforward(inp)
                 self.train_loss, self.eval_losses = self.compute_loss()
@@ -220,7 +218,6 @@ class BaseNetTorch(torch.nn.Module):
                 eval_outputs["output"].append(self.eval_losses)
                 # print("\n\n\n\n\neval_outputs:", eval_outputs["output"])
 
-            # np.concatenate([output.detach().numpy() for output in eval_outputs["output"]])
 
             eval_metrics_results = {k: np.mean([i.detach().cpu().numpy() for i in v], axis=0) for k, v in
                                     eval_metrics_results.items()}
