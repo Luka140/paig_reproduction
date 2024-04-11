@@ -95,7 +95,6 @@ class PhysicsNet(BaseNetTorch):
         self.coord_units = COORD_UNITS[self.task]
         self.n_objs = self.coord_units//4
 
-        # TODO commented out to avoid visualize sequence
         self.extra_valid_fns.append((self.visualize_sequence,[],{}))
         self.extra_test_fns.append((self.visualize_sequence,[],{}))
 
@@ -108,10 +107,10 @@ class PhysicsNet(BaseNetTorch):
         self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs, self.device)
         self.velocity_encoder = VelocityEncoder(self.alt_vel, self.input_steps, self.n_objs, self.coord_units, self.device)
 
-        test_inp_dim = 4
-        self.test_network = pnn.Sequential(pnn.Linear(test_inp_dim, 200), pnn.ReLU(), pnn.Linear(200,200), pnn.ReLU(), pnn.Linear(200, 3*32*32), pnn.Sigmoid())
+        # test_inp_dim = 4
+        # self.test_network = pnn.Sequential(pnn.Linear(test_inp_dim, 200), pnn.ReLU(), pnn.Linear(200,200), pnn.ReLU(), pnn.Linear(200, 3*32*32), pnn.Sigmoid())
 
-        lstm_hidden_dim = 100
+        # lstm_hidden_dim = 100
         # self.lstm = pnn.LSTM((self.input_steps+self.pred_steps)*self.conv_ch * self.input_shape[1]**2, lstm_hidden_dim, batch_first=True, num_layers=self.lstm_layers, dropout=0.05)
         # self.lstm_linear = pnn.Linear(lstm_hidden_dim, np.prod(self.input_shape))
         # lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
@@ -157,10 +156,8 @@ class PhysicsNet(BaseNetTorch):
     # def build_graph(self):
     #     tf.compat.v1.disable_eager_execution()
     #     # self.input = tf.compat.v1.placeholder(tf.float32, shape=[None, self.seq_len]+self.input_shape)
-    #     # TODO Placeholder ====================================================================================
     #     batch_size = 100
     #     self.input = torch.randn(batch_size, self.seq_len, *self.input_shape)
-    #     # TODO Placeholder ====================================================================================
     #     self.output = self.conv_feedforward(self.input)
     #
     #     self.train_loss, self.eval_losses = self.compute_loss()
