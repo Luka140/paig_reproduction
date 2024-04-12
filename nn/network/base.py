@@ -69,7 +69,7 @@ class BaseNetTorch(torch.nn.Module):
                          ckpt_dir=""):
 
         self.save_dir = save_dir
-        # self.saver = tf.compat.v1.train.Saver()
+
         if os.path.exists(save_dir):
             if use_ckpt:
                 restore = True
@@ -90,12 +90,9 @@ class BaseNetTorch(torch.nn.Module):
             else:
                 restore = False
 
-        # restore = False # TODO: REMOVE THIS LINE LATER, SOMEHOW RESTORE IS SET TO TRUE CAUSING ERRORS
-        # if restore:
-            # self.saver.restore(self.sess, os.path.join(restore_dir, "model.ckpt"))
-            # self.sess.run(self.lr.assign(self.base_lr))
-        # else:
-            # self.sess.run(tf.compat.v1.global_variables_initializer())
+        if restore:
+            print(f"Loading model from: {restore_dir+'/model.ckpt'}")
+            self.load_state_dict(torch.load(os.path.join(restore_dir, "model.ckpt")))
 
     def get_iterator(self, type):
         if type == "train":
@@ -172,9 +169,9 @@ class BaseNetTorch(torch.nn.Module):
                 valid_metrics_results = self.eval_performance(batch_size, type='valid')
                 log_metrics(logger, "valid - epoch=%s" % ep, valid_metrics_results)
 
-            # if ep % save_every_n_epochs == 0:
-            #     print("saving")
-                # torch.save(self, os.path.join(self.save_dir, "model.ckpt"))
+            if ep % save_every_n_epochs == 0:
+                print("saving")
+                torch.save(self.state_dict(), os.path.join(self.save_dir, "model.ckpt"))
 
         test_metrics_results = self.eval_performance(batch_size, type='test')
         log_metrics(logger, "test - epoch=%s" % epochs, test_metrics_results)
@@ -203,7 +200,6 @@ class BaseNetTorch(torch.nn.Module):
                 # fetches = {k: v for k, v in self.eval_metrics.items()}
                 # fetches["output"] = self.output
                 # fetches["input"] = self.input
-                # TODO Device mismatch error at this point
                 inp = torch.tensor(feed_dict["input"], requires_grad=False, device=self.device)
                 self.output = self.conv_feedforward(inp)
                 self.train_loss, self.eval_losses = self.compute_loss()
@@ -219,7 +215,6 @@ class BaseNetTorch(torch.nn.Module):
                 eval_outputs["input"].append(feed_dict["input"])
                 eval_outputs["output"].append(self.eval_losses)
                 # print("\n\n\n\n\neval_outputs:", eval_outputs["output"])
-
 
             eval_metrics_results = {k: np.mean([i.detach().cpu().numpy() for i in v], axis=0) for k, v in
                                     eval_metrics_results.items()}
