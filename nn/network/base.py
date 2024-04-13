@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from nn.utils.misc import log_metrics, zipdir
+import torch
 
 logger = logging.getLogger("tf")
 root_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..")

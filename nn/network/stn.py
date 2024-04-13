@@ -1,4 +1,3 @@
-from six.moves import xrange
 import tensorflow as tf
 import torch.nn.functional as F
 import torch
