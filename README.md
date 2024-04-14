@@ -7,9 +7,8 @@ This repo contains the code for the paper Physics-as-Inverse-Graphics: Unsupervi
 To train run:
 
 ```
-PYTHONPATH=. python runners/run_physics.py --task=spring_color --model=PhysicsNet --epochs=500 
---batch_size=100 --save_dir=<experiment_folder> --autoencoder_loss=3.0 --base_lr=3e-4 --anneal_lr=true
---color=true --eval_every_n_epochs=10 --print_interval=100 --debug=false --use_ckpt=false 
+PYTHONPATH=. python runners/torch_run_physics.py --task=spring_color --model=PhysicsNet --epochs=500 --batch_size=100 --save_dir=<experiment_folder> --autoencoder_loss=3.0 --base_lr=3e-4 --color --eval_every_n_epochs=10 --print_interval=100 
+
 ```
 
 This will automatically run on the test set (evaluation with extrapolation range) in the end of training.
