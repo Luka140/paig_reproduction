@@ -2,7 +2,7 @@
 
 This repo contains the code for the reproduction of the paper Physics-as-Inverse-Graphics: Unsupervised Physical Parameter Estimation from Video (https://arxiv.org/abs/1905.11169).
 
-The blog post about our reproducibility project can be found [here](https://www.notion.so/Reproduction-blog-post-1381d79939c442af9db7a57099770ac1?pvs=4).
+The blog post about our reproducibility project can be found [here](https://selective-astrodon-738.notion.site/Reproduction-blog-post-1381d79939c442af9db7a57099770ac1).
 
 
 
