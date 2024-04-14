@@ -13,10 +13,10 @@ def stn(U, theta, out_size):
     grid = F.affine_grid(theta, size)
     output = F.grid_sample(U.float(), grid.float())
 
-    return output #output.permute(0, 2, 3, 1)  # Transpose dimensions to match expected shape
+    return output
 
 def batch_transformer(U, thetas, out_size):
-    U_pytorch = U#.permute(0, 3, 1, 2).clone().detach()
+    U_pytorch = U
     num_batch, num_transforms = thetas.shape[:2]
     input_repeated = U_pytorch.unsqueeze(1).repeat(1, num_transforms, 1, 1, 1)
     input_repeated = input_repeated.view(-1, *U_pytorch.shape[1:])

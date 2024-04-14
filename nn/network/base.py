@@ -3,12 +3,10 @@ import sys
 import shutil
 import logging
 import numpy as np
-import torch
-
 from nn.utils.misc import log_metrics, zipdir
 import torch
 
-logger = logging.getLogger("tf")
+logger = logging.getLogger("torch")
 root_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..")
 
 OPTIMIZERS = {
@@ -139,13 +137,9 @@ class BaseNetTorch(torch.nn.Module):
                     self.lr = self.lr / 5
             while self.train_iterator.epochs_completed < ep:
                 feed_dict, _ = self.get_batch(batch_size, self.train_iterator)
-                # results, _ = self.sess.run(
-                # [self.train_metrics, self.train_op], feed_dict=feed_dict)
-                # torch.inference_mode(False)
 
                 inp = torch.tensor(feed_dict["input"], requires_grad=True, device=self.device)
                 result_sequence = self.forward(inp)
-                # self.optimizer.zero_grad(set_to_none=True)
                 self.train_loss, self.eval_losses = self.compute_loss()
 
                 self.train_metrics["train_loss"] = self.train_loss
@@ -182,9 +176,7 @@ class BaseNetTorch(torch.nn.Module):
              type='valid'):
 
         self.eval()
-        # torch.inference_mode(True)
         with torch.no_grad():
-            # self.eval_metrics["train_loss"] = torch.Tensor([0])
             self.eval_metrics["eval_pred_loss"] = torch.tensor([0], device=self.device)
             self.eval_metrics["eval_extrap_loss"] = torch.tensor([0], device=self.device)
             self.eval_metrics["eval_recons_loss"] = torch.tensor([0], device=self.device)
@@ -198,9 +190,7 @@ class BaseNetTorch(torch.nn.Module):
                 if eval_iterator.X.shape[0] < 100:
                     batch_size = eval_iterator.X.shape[0]
                 feed_dict, _ = self.get_batch(batch_size, eval_iterator)
-                # fetches = {k: v for k, v in self.eval_metrics.items()}
-                # fetches["output"] = self.output
-                # fetches["input"] = self.input
+
                 inp = torch.tensor(feed_dict["input"], requires_grad=False, device=self.device)
                 self.output = self.conv_feedforward(inp)
                 self.train_loss, self.eval_losses = self.compute_loss()

@@ -3,5 +3,5 @@ moviepy==1.0.3
 numpy==1.23.5
 six==1.16.0
 scikit-image
-tensorflow==2.15.0
+torch==2.2.1
 pillow==9.5.0

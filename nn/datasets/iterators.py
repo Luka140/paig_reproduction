@@ -1,7 +1,5 @@
-import os
-import time
 import numpy as np
-import tensorflow as tf
+
 
 class DataIterator:
 
@@ -64,14 +62,8 @@ def get_iterators(file, conv=False, datapoints=0):
     else:
         img_shape = data["train_x"][0,0].flatten().shape
 
-<<<<<<< HEAD
-
-    train_it = DataIterator(X=dat["train_x"].reshape(dat["train_x"].shape[:2]+img_shape)/255)
-    valid_it = DataIterator(X=data["valid_x"].reshape(data["valid_x"].shape[:2]+img_shape)/255)
-    test_it = DataIterator(X=data["test_x"].reshape(data["test_x"].shape[:2]+img_shape)/255)
-=======
     train_it = DataIterator(X=data["train_x"].astype(np.float32).reshape(data["train_x"].shape[:2]+img_shape)/255)
     valid_it = DataIterator(X=data["valid_x"].astype(np.float32).reshape(data["valid_x"].shape[:2]+img_shape)/255)
     test_it = DataIterator(X=data["test_x"].astype(np.float32).reshape(data["test_x"].shape[:2]+img_shape)/255)
->>>>>>> torch
+
     return train_it, valid_it, test_it

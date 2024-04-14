@@ -75,40 +75,43 @@ data_file, test_data_file, cell_type, seq_len, test_seq_len, input_steps, pred_s
 }[args.task]
 
 if __name__ == "__main__":
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if not args.test_mode:
-            network = Model(args.task, args.recurrent_units, args.lstm_layers, cell_type, 
-                            seq_len, input_steps, pred_steps,
-                            args.autoencoder_loss, args.alt_vel, args.color, 
-                            input_size, args.encoder_type, args.decoder_type)
+        torch.set_default_device(device)
+        network = Model(args.task, args.recurrent_units, args.lstm_layers, cell_type, 
+                        seq_len, input_steps, pred_steps,
+                       args.autoencoder_loss, args.alt_vel, args.color, 
+                       input_size, args.encoder_type, args.decoder_type, device=device)
 
-            network.build_graph()
-            network.build_optimizer(args.base_lr, args.optimizer, args.anneal_lr)
-            network.initialize_graph(args.save_dir, args.use_ckpt, args.ckpt_dir)
+        data_iterators = get_iterators(
+                              os.path.join(
+                                  os.path.dirname(os.path.realpath(__file__)), 
+                                  "../data/datasets/%s"%data_file), conv=True, datapoints=args.datapoints)
 
-            data_iterators = get_iterators(
-                os.path.join(
-                    os.path.dirname(os.path.realpath(__file__)), 
-                    "../data/datasets/%s"%data_file), conv=True, datapoints=args.datapoints)
-            network.get_data(data_iterators)
-            network.train(args.epochs, args.batch_size, args.save_every_n_epochs, args.eval_every_n_epochs,
-                        args.print_interval, args.debug)
 
-            torch.cuda.empty_cache()
+        network.to(network.device)
+        network.get_data(data_iterators)
+
+        network.build_optimizer(args.base_lr, args.optimizer, args.anneal_lr)
+        network.initialize_graph(args.save_dir, args.use_ckpt, args.ckpt_dir)
+
+        network.train_model(args.epochs, args.batch_size, args.save_every_n_epochs, args.eval_every_n_epochs,
+                    args.print_interval, args.debug)
 
     network = Model(args.task, args.recurrent_units, args.lstm_layers, cell_type, 
                     test_seq_len, input_steps, pred_steps,
-                args.autoencoder_loss, args.alt_vel, args.color, 
-                input_size, args.encoder_type, args.decoder_type)
+                   args.autoencoder_loss, args.alt_vel, args.color, 
+                   input_size, args.encoder_type, args.decoder_type, device=device)
 
-    network.build_graph()
+    network.to(network.device)
+
     network.build_optimizer(args.base_lr, args.optimizer, args.anneal_lr)
     network.initialize_graph(args.save_dir, True, args.ckpt_dir)
 
     data_iterators = get_iterators(
-                        os.path.join(
-                            os.path.dirname(os.path.realpath(__file__)), 
-                            "../data/datasets/%s" % test_data_file), conv=True, datapoints=args.datapoints)
+                          os.path.join(
+                              os.path.dirname(os.path.realpath(__file__)), 
+                              "../data/datasets/%s"%test_data_file), conv=True, datapoints=args.datapoints)
     network.get_data(data_iterators)
-    network.train(0, args.batch_size, args.save_every_n_epochs, args.eval_every_n_epochs,
+    network.train_model(0, args.batch_size, args.save_every_n_epochs, args.eval_every_n_epochs,
                 args.print_interval, args.debug)
-  

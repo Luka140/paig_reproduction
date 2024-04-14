@@ -69,8 +69,8 @@ class PhysicsNet(BaseNetTorch):
         self.conv_ch = 3 if color else 1
         self.input_size = input_size
 
-        self.conv_input_shape = [self.conv_ch]+[int(np.sqrt(input_size))]*2 # Swapped order of channels and img dimensions
-        self.input_shape = [self.conv_ch] + [int(np.sqrt(input_size))]*2 # same as conv_input_shape, just here for backward compatibility
+        self.conv_input_shape = [self.conv_ch]+[int(np.sqrt(input_size))]*2
+        self.input_shape = [self.conv_ch] + [int(np.sqrt(input_size))]*2  # same as conv_input_shape, just here for backward compatibility
 
         # self.encoder = {name: method for name, method in \
         #     inspect.getmembers(self, predicate=inspect.ismethod) if "encoder" in name
@@ -98,25 +98,17 @@ class PhysicsNet(BaseNetTorch):
         self.extra_valid_fns.append((self.visualize_sequence,[],{}))
         self.extra_test_fns.append((self.visualize_sequence,[],{}))
 
-        ############
         tmpl_size = self.conv_input_shape[1]//2
+        # for decoder
+        self.log_sig = 1.
+
+        # Network subcomponents
         self.var_net_content = VariableFromNetwork([self.n_objs, self.conv_ch, tmpl_size, tmpl_size])
         self.var_net_background = VariableFromNetwork([1,*self.input_shape])
         self.var_net_template = VariableFromNetwork([self.n_objs, 1, tmpl_size, tmpl_size])
-        # self.dtype = torch.float32
         self.encoder = ConvolutionalEncoder(self.conv_input_shape, 200, 2, self.n_objs, self.device)
         self.velocity_encoder = VelocityEncoder(self.alt_vel, self.input_steps, self.n_objs, self.coord_units, self.device)
-
-        # test_inp_dim = 4
-        # self.test_network = pnn.Sequential(pnn.Linear(test_inp_dim, 200), pnn.ReLU(), pnn.Linear(200,200), pnn.ReLU(), pnn.Linear(200, 3*32*32), pnn.Sigmoid())
-
-        # lstm_hidden_dim = 100
-        # self.lstm = pnn.LSTM((self.input_steps+self.pred_steps)*self.conv_ch * self.input_shape[1]**2, lstm_hidden_dim, batch_first=True, num_layers=self.lstm_layers, dropout=0.05)
-        # self.lstm_linear = pnn.Linear(lstm_hidden_dim, np.prod(self.input_shape))
-        # lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
-
-        # for decoder 
-        self.log_sig = 1.
+        self.rollout_cell = self.cell(self.coord_units // 2, self.coord_units // 2)
 
     def get_batch(self, batch_size, iterator):
         batch_x, _ = iterator.next_batch(batch_size)
@@ -126,12 +118,8 @@ class PhysicsNet(BaseNetTorch):
 
     def compute_loss(self):
 
-        # loss = torch.nn.CrossEntropyLoss()
-
         # Compute reconstruction loss
         recons_target = self.input[:,:self.input_steps+self.pred_steps]
-        # output = loss(self.recons_out, recons_target)
-
 
         recons_loss = torch.square(recons_target-self.recons_out)
         recons_loss = torch.sum(recons_loss, dim=[2,3,4])
@@ -153,39 +141,12 @@ class PhysicsNet(BaseNetTorch):
         eval_losses = [self.pred_loss, self.extrap_loss, self.recons_loss]
         return train_loss, eval_losses
 
-    # def build_graph(self):
-    #     tf.compat.v1.disable_eager_execution()
-    #     # self.input = tf.compat.v1.placeholder(tf.float32, shape=[None, self.seq_len]+self.input_shape)
-    #     batch_size = 100
-    #     self.input = torch.randn(batch_size, self.seq_len, *self.input_shape)
-    #     self.output = self.conv_feedforward(self.input)
-    #
-    #     self.train_loss, self.eval_losses = self.compute_loss()
-    #     self.train_metrics["train_loss"] = self.train_loss
-    #     self.eval_metrics["eval_pred_loss"] = self.eval_losses[0]
-    #     self.eval_metrics["eval_extrap_loss"] = self.eval_losses[1]
-    #     self.eval_metrics["eval_recons_loss"] = self.eval_losses[2]
-    #     self.loss = self.train_loss
-
     def build_optimizer(self, base_lr, optimizer="rmsprop", anneal_lr=True):
         # Uncomment lines below to have different learning rates for physics and vision components
-        # TODO dit moet gefixt worden via base branch met nieuwe FLAGs
-        # base_lr = 1e-2
         self.base_lr = base_lr
         self.anneal_lr = anneal_lr
         self.lr = base_lr
         self.optimizer = OPTIMIZERS[optimizer](self.parameters(), self.lr)
-        #self.dyn_optimizer = OPTIMIZERS[optimizer](1e-3)
-
-
-        # gvs = self.optimizer.compute_gradients(self.loss, var_list=tf.compat.v1.trainable_variables())
-        # gvs = [(tf.clip_by_value(grad, -1.0, 1.0), var) for grad, var in gvs if grad is not None]
-        # self.train_op = self.optimizer.apply_gradients(gvs)
-
-        # self.train_op = self.optimizer.apply_gradients([gv for gv in gvs if "cell" not in gv[1].name])
-        # if len([gv for gv in gvs if "cell" in gv[1].name]) > 0:
-        #     self.dyn_train_op = self.dyn_optimizer.apply_gradients([gv for gv in gvs if "cell" in gv[1].name])
-        #     self.train_op = tf.group(self.train_op, self.dyn_train_op)
 
     def conv_st_decoder(self, inp):
         batch_size = inp.shape[0]
@@ -198,9 +159,7 @@ class PhysicsNet(BaseNetTorch):
         # logsigma = tf.compat.v1.get_variable("logsigma", shape=[], initializer=tf.compat.v1.constant_initializer(np.log(1.0)), trainable=True)
         logsigma = np.log(self.log_sig)
         sigma = np.exp(logsigma)
-        
-        #TODO i think this is supposed to be the background - whats up with the tile though - why +5?
-        
+
         template = self.var_net_template()
         self.template = template
         template = torch.tile(template, [1,3,1,1])+5
@@ -244,16 +203,8 @@ class PhysicsNet(BaseNetTorch):
 
     def conv_feedforward(self, inp):
         self.input = inp
-        # lstms = [tf.compat.v1.nn.rnn_cell.LSTMCell(self.recurrent_units) for i in range(self.lstm_layers)]
-        # states = [lstm.zero_state(tf.shape(self.input)[0], dtype=tf.float32) for lstm in lstms]
-        rollout_cell = self.cell(self.coord_units//2, self.coord_units//2)
-
         h = self.input[:,:self.input_steps+self.pred_steps].reshape(self.input.shape[0],self.input_steps+self.pred_steps,-1)
-        # print(h.shape)
-        # h, _ = self.lstm(h)
-        # print(h.shape)
-        # h = self.lstm_linear(h)
-        # print(h.shape)
+
         # Encode all the input and train frames
         # sequence length and batch get flattened together in dim0
         h = torch.reshape(h, [-1]+self.input_shape)
@@ -262,9 +213,6 @@ class PhysicsNet(BaseNetTorch):
 
         # decode the input and pred frames
         recons_out = self.decoder(enc_pos)
-        # print(enc_pos.shape, recons_out.shape)
-        # recons_out = self.test_network(enc_pos)
-        # recons_out = torch.reshape(recons_out, (-1, self.input_size))
 
         self.recons_out = torch.reshape(recons_out, [self.input.shape[0], self.input_steps+self.pred_steps]+self.input_shape)
         self.enc_pos = torch.reshape(enc_pos, [self.input.shape[0], self.input_steps+self.pred_steps, self.coord_units//2])
@@ -282,7 +230,7 @@ class PhysicsNet(BaseNetTorch):
         # rollout ODE and decoder
         for t in range(self.pred_steps+self.extrap_steps):
             # rollout
-            pos, vel = rollout_cell(pos, vel)
+            pos, vel = self.rollout_cell(pos, vel)
 
             # decode
             out = self.decoder(pos)
@@ -321,8 +269,6 @@ class PhysicsNet(BaseNetTorch):
             total_seq = np.concatenate(to_concat, axis=0) 
 
             total_seq = total_seq.reshape([total_seq.shape[0], *self.input_shape[1:], self.conv_ch])
-                                           # self.input_shape[0],
-                                           # self.input_shape[1], self.conv_ch])
 
             result = gallery(total_seq, ncols=batch_x.shape[1])
 
@@ -363,7 +309,7 @@ class PhysicsNet(BaseNetTorch):
                    "enc_masks": self.enc_masks.cpu(),
                    "masked_objs": [masked_obj.cpu() for masked_obj in self.masked_objs]}
         results = fetches
-        # results = self.sess.run(fetches, feed_dict=feed_dict)
+
         np.savez_compressed(os.path.join(self.save_dir, "extra_outputs.npz"), **results)
         contents = torch.transpose(results["contents"], 1, -1)
         templates = torch.transpose(results["templates"], 1, -1)

@@ -6,8 +6,7 @@ import torchvision.transforms as tvtrans
 
 
 class VelocityEncoder(pnn.Module):
-    # TODO test if the functionality of VelocityEncoder block module is the same as the 
-    # original function in physics_models.py
+
     def __init__(self, alt_vel, input_steps, n_objs, coord_units, device):
         super(VelocityEncoder, self).__init__()
         self.alt_vel = alt_vel
@@ -48,6 +47,7 @@ class VelocityEncoder(pnn.Module):
             h = torch.chunk(h, self.n_objs, dim=0)
             h = torch.cat(h, dim=1)
         return h
+
 
 class ConvolutionalEncoder(pnn.Module):
     def __init__(self, in_features, hidden_dim, out_features, n_objects, device):
@@ -105,12 +105,10 @@ class ConvolutionalEncoder(pnn.Module):
 
 class UNet(pnn.Module):
     def __init__(self, in_features, hidden_dim, out_features, upsamp=True):
-        # TODO THIS CURRENTLY ONLY WORKS FOR UPSAMP=TRUE BUT I DON'T SEE HOW THE ORIGINAL WAS SUPPOSED TO WORK FOR FALSE
-        # TODO this option is also never used so maybe just remove it
+        # This currently only works correctly for upsamp=True, but upsamp=False is never used
         in_channels, height, width = in_features
         super(UNet, self).__init__()
-        # h = inp
-        # h = tf.compat.v1.layers.conv2d(h, base_channels, 3, activation=tf.nn.relu, padding="SAME")
+
         self.upsamp = upsamp
         self.c1 = pnn.Conv2d(in_channels, hidden_dim, kernel_size=3, padding="same")
         self.rel1 = pnn.ReLU()
